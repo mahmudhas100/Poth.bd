@@ -14,8 +14,8 @@ build/
 *.tsbuildinfo
 
 # Service Worker & PWA Caches
-frontend/public/sw.js
 frontend/public/workbox-*.js
+
 
 # IDE & Editor files
 .vscode/
