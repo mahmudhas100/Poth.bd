@@ -14,6 +14,8 @@ def init_db_pragmas():
     except Exception as e:
         print(f"Warning: Could not configure WAL mode: {e}")
 
+from pathlib import Path
+
 @contextmanager
 def get_db(read_only: bool = True):
     """
@@ -21,11 +23,11 @@ def get_db(read_only: bool = True):
     Defaults to read_only mode for high concurrency read operations.
     """
     if read_only and os.path.exists(settings.DB_PATH):
-        db_path = os.path.abspath(settings.DB_PATH).replace("\\", "/")
-        uri = f"file:{db_path}?mode=ro"
-        conn = sqlite3.connect(uri, uri=True, timeout=5.0)
+        db_uri = f"{Path(settings.DB_PATH).resolve().as_uri()}?mode=ro"
+        conn = sqlite3.connect(db_uri, uri=True, timeout=5.0)
     else:
         conn = sqlite3.connect(settings.DB_PATH, timeout=5.0)
+
 
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout = 5000;")

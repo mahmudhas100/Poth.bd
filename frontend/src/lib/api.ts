@@ -1,6 +1,10 @@
 import { Stop, SearchResult } from "@/types/transit";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === "production"
+    ? "https://poth-api.fly.dev"
+    : "http://127.0.0.1:8000");
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 /**
  * Fetch all canonical bus stops with offline fallback caching.
