@@ -68,6 +68,9 @@ export const metadata: Metadata = {
 };
 
 
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+
 export const viewport: Viewport = {
   themeColor: "#2563eb",
   width: "device-width",
@@ -89,17 +92,25 @@ export default function RootLayout({
             __html: `
               if ('serviceWorker' in navigator) {
                 if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-                  navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                    for(let registration of registrations) {
-                      registration.unregister();
-                    }
+                  navigator.serviceWorker.getRegistrations().then(function(regs) {
+                    for (var r of regs) r.unregister();
                   });
                 } else {
-                  window.addEventListener('load', function() {
-                    navigator.serviceWorker.register('/sw.js').catch(function(err) {
-                      console.log('ServiceWorker registration failed: ', err);
-                    });
-                  });
+                  function registerSW() {
+                    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                      .then(function(reg) {
+                        console.log('Poth SW active: ', reg.scope);
+                      })
+                      .catch(function(err) {
+                        console.error('Poth SW registration error: ', err);
+                      });
+                  }
+                  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                    registerSW();
+                  } else {
+                    window.addEventListener('DOMContentLoaded', registerSW);
+                    window.addEventListener('load', registerSW);
+                  }
                 }
               }
             `,
@@ -108,7 +119,10 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         {children}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
 }
+
