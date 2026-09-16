@@ -2,8 +2,9 @@
 
 import React from "react";
 import { SearchIcon, MoveRightIcon } from "@animateicons/react/lucide";
-import { BusIcon, NavigationIcon, RouteDistanceIcon, ShareIcon } from "@/components/ui/Icons";
+import { BusIcon, NavigationIcon, RouteDistanceIcon, ShareIcon, MapPinIcon } from "@/components/ui/Icons";
 import { DirectFareResult, TransitResult, SuggestionResult } from "@/types/transit";
+import { getGoogleMapsDirectionUrl } from "@/lib/maps";
 
 interface DirectRouteCardProps {
   route: DirectFareResult;
@@ -62,6 +63,16 @@ export const DirectRouteCard: React.FC<DirectRouteCardProps> = ({
             <NavigationIcon size={14} className="group-hover:-translate-y-0.5 transition-transform" />
             View All Stops
           </button>
+          <a
+            href={getGoogleMapsDirectionUrl(route.from_stop, route.to_stop)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3.5 sm:px-4 py-3.5 bg-slate-50/50 hover:bg-emerald-50 border border-slate-200/60 rounded-xl text-slate-500 hover:text-emerald-600 hover:border-emerald-200 transition-all flex items-center justify-center gap-1.5 group font-display"
+            title="গুগল ম্যাপে ডিরেকশন দেখুন (Google Maps)"
+          >
+            <MapPinIcon size={15} className="group-hover:scale-110 text-emerald-600 transition-transform" />
+            <span className="text-xs font-bold uppercase tracking-wider hidden sm:inline text-emerald-700">Maps</span>
+          </a>
           <button
             onClick={() =>
               onShare(
@@ -74,7 +85,7 @@ export const DirectRouteCard: React.FC<DirectRouteCardProps> = ({
                 route.fare
               )
             }
-            className="px-4 py-3.5 bg-slate-50/50 hover:bg-blue-50 border border-slate-200/60 rounded-xl text-slate-400 hover:text-accent hover:border-blue-200 transition-all flex items-center justify-center"
+            className="px-3.5 sm:px-4 py-3.5 bg-slate-50/50 hover:bg-blue-50 border border-slate-200/60 rounded-xl text-slate-400 hover:text-accent hover:border-blue-200 transition-all flex items-center justify-center"
             title="Share Fare Details"
           >
             <ShareIcon size={16} />
@@ -193,23 +204,39 @@ export const TransitRouteCard: React.FC<TransitRouteCardProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={() =>
-            onShare(
-              result.leg1.from_stop_bn,
-              result.leg2.to_stop_bn,
+        <div className="flex gap-2">
+          <a
+            href={getGoogleMapsDirectionUrl(
               result.leg1.from_stop,
-              result.leg2.to_stop,
-              `Transit via ${result.transfer_at_bn}`,
-              result.total_distance_km,
-              result.total_fare
-            )
-          }
-          className="w-full py-3 bg-slate-50/50 hover:bg-amber-50 border border-slate-200/60 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-amber-600 hover:border-amber-200 transition-all flex items-center justify-center gap-2 group font-display"
-        >
-          <ShareIcon size={14} className="group-hover:scale-110 transition-transform" />
-          Share Transit Details
-        </button>
+              result.leg2.to_stop
+            )}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 py-3 bg-slate-50/50 hover:bg-emerald-50 border border-slate-200/60 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-emerald-600 hover:border-emerald-200 transition-all flex items-center justify-center gap-2 group font-display"
+            title="গুগল ম্যাপে ট্রানজিট ডিরেকশন দেখুন (Google Maps)"
+          >
+            <MapPinIcon size={14} className="group-hover:scale-110 text-emerald-600 transition-transform" />
+            Maps Direction
+          </a>
+          <button
+            onClick={() =>
+              onShare(
+                result.leg1.from_stop_bn,
+                result.leg2.to_stop_bn,
+                result.leg1.from_stop,
+                result.leg2.to_stop,
+                `Transit via ${result.transfer_at_bn}`,
+                result.total_distance_km,
+                result.total_fare
+              )
+            }
+            className="px-4 py-3 bg-slate-50/50 hover:bg-amber-50 border border-slate-200/60 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-amber-600 hover:border-amber-200 transition-all flex items-center justify-center gap-2 group font-display"
+            title="Share Transit Details"
+          >
+            <ShareIcon size={14} className="group-hover:scale-110 transition-transform" />
+            <span className="hidden sm:inline">Share</span>
+          </button>
+        </div>
       </div>
     </div>
   );
