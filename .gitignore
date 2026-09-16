@@ -1,0 +1,46 @@
+# Dependencies & Environments
+node_modules/
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Builds & Frameworks
+.next/
+dist/
+out/
+build/
+*.tsbuildinfo
+
+# Service Worker & PWA Caches
+frontend/public/sw.js
+frontend/public/workbox-*.js
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker & OS artifacts
+.docker/
+Thumbs.db
+
+# Raw Data, OCR Artifacts, PDFs & Images
+raw_data/
+backend/data/*.json
+backend/data/raw_json/
+
+# SQLite Temporary Files (preserve busvara.db)
+*.db-shm
+*.db-wal
+*.db-journal
+

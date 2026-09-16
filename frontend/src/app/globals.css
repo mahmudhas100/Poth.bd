@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: 'Outfit', var(--font-display), sans-serif;
+  --font-bengali: 'Hind Siliguri', var(--font-bengali), sans-serif;
+
+  --color-background: #F8FAFC;
+  --color-foreground: #0F172A;
+  --color-accent: #2563EB;
+  --color-accent-hover: #1D4ED8;
+  --color-border: rgba(226, 232, 240, 0.7);
+  --color-surface: rgba(255, 255, 255, 0.6);
+  --color-surface-solid: #FFFFFF;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground font-bengali min-h-screen relative overflow-x-hidden antialiased selection:bg-accent/20;
+    font-feature-settings: "kern" 1, "onum" 1, "pnum" 1;
+  }
+
+  /* Animated Mesh Background */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.12) 0%, transparent 35%),
+                radial-gradient(circle at 80% 20%, rgba(16, 185, 129, 0.08) 0%, transparent 30%),
+                radial-gradient(circle at 20% 80%, rgba(139, 92, 246, 0.12) 0%, transparent 35%);
+    z-index: -1;
+    animation: rotateMesh 40s linear infinite;
+  }
+
+  @keyframes rotateMesh {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-bold tracking-tight;
+  }
+}
+
+@layer components {
+  .transit-card {
+    @apply bg-surface backdrop-blur-2xl border border-white/60 rounded-3xl p-6 md:p-8 transition-all duration-500 hover:border-accent/30 hover:shadow-2xl hover:shadow-accent/10 hover:-translate-y-1 relative overflow-hidden;
+    box-shadow: 0 8px 30px -4px rgba(0,0,0,0.03), inset 0 1px 0 rgba(255,255,255,0.8);
+  }
+
+  .search-input-wrapper {
+    @apply relative flex items-center transition-all duration-300 rounded-2xl bg-surface-solid border-2 border-slate-200/80 shadow-sm focus-within:ring-4 focus-within:ring-accent/10 focus-within:border-accent z-20;
+  }
+
+  .search-input {
+    @apply w-full bg-transparent px-4 py-4 md:px-5 md:pt-7 md:pb-3 text-lg outline-none font-bengali text-slate-800 font-semibold;
+  }
+
+  .btn-primary {
+    @apply relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-5 py-4 md:px-6 md:py-5 rounded-2xl font-display font-bold text-lg md:text-xl transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5 active:scale-[0.98] active:translate-y-0 disabled:opacity-70 disabled:active:scale-100 disabled:hover:translate-y-0;
+  }
+
+  .btn-primary::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(rgba(255,255,255,0.2), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .btn-primary:hover::after {
+    opacity: 1;
+  }
+
+  .fare-number {
+    @apply font-display font-extrabold tabular-nums tracking-tighter bg-clip-text text-transparent bg-gradient-to-br from-slate-800 to-slate-500 pr-2 pb-1;
+  }
+  
+  .fare-number-accent {
+    @apply font-display font-extrabold tabular-nums tracking-tighter bg-clip-text text-transparent bg-gradient-to-br from-blue-600 to-indigo-600 drop-shadow-sm pr-2 pb-1;
+  }
+}
+
+/* Animations */
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-stagger-1 { animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both; }
+.animate-stagger-2 { animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both; }
+.animate-stagger-3 { animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both; }
+.animate-stagger-4 { animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.4s both; }
+.animate-stagger-5 { animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both; }
