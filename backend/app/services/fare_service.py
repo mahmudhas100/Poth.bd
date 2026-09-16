@@ -53,13 +53,17 @@ def format_route_name(c, route_name_raw: str, route_id: int) -> str:
         origin = stops[0]
         destination = stops[-1]
 
-        match = re.search(r'\((এ-[০-৯\w]+(?:নং)?)\)', route_name_raw)
-        route_num = match.group(1) if match else ""
+        match = re.search(r'(?:^|[\s\(])(এ-[০-৯\w]+(?:\s*নং)?)(?:[\s\)]|$)', route_name_raw)
+        if match:
+            route_num = match.group(1)
+            bn_to_en = str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789')
+            route_num_en = route_num.translate(bn_to_en).replace('এ-', 'A-').replace('নং', '').strip()
+            suffix = f" ({route_num_en})"
+        elif "পাইলটিং" in route_name_raw:
+            suffix = " (Nagar Paribahan)"
+        else:
+            suffix = ""
 
-        bn_to_en = str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789')
-        route_num_en = route_num.translate(bn_to_en).replace('এ-', 'A-').replace('নং', '')
-
-        suffix = f" ({route_num_en})" if route_num_en else ""
         return f"{origin} ⇄ {destination}{suffix}"
     
     return route_name_raw
@@ -158,9 +162,6 @@ def calculate_fare_search(c, from_stop: str, to_stop: str):
                     )
                 ))
         
-        if suggestions:
-            return suggestions[:3], None
-
     # Transit Search
     c.execute("SELECT DISTINCT route_id FROM route_stops WHERE stop_id = ?", (from_id,))
     routes_from = [r[0] for r in c.fetchall()]
@@ -168,6 +169,8 @@ def calculate_fare_search(c, from_stop: str, to_stop: str):
     routes_to = [r[0] for r in c.fetchall()]
 
     if not routes_from or not routes_to:
+        if suggestions:
+            return suggestions[:3], None
         return [], None
 
     query_transit = """
@@ -243,4 +246,13 @@ def calculate_fare_search(c, from_stop: str, to_stop: str):
                     ))
 
     transit_results.sort(key=lambda x: (x.total_fare, x.total_distance_km))
-    return transit_results[:10], None
+
+    if transit_results:
+        if suggestions:
+            return suggestions[:2] + transit_results[:8], None
+        return transit_results[:10], None
+
+    if suggestions:
+        return suggestions[:3], None
+
+    return [], None

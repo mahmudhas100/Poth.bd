@@ -58,7 +58,7 @@ def test_transit_fare_search():
     assert any(r["type"] == "transit" for r in results)
 
 def test_suggestion_search():
-    response = client.get("/search?from_stop=Uttara&to_stop=Asad Gate")
+    response = client.get("/search?from_stop=Farmgate&to_stop=Abdullahpur Jail")
     assert response.status_code == 200
     results = response.json()
     assert len(results) > 0
