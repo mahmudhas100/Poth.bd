@@ -74,6 +74,35 @@ def test_invalid_stop_not_found():
     response = client.get("/search?from_stop=NowhereXYZ123&to_stop=Farmgate")
     assert response.status_code == 404
 
+def test_stops_include_aliases():
+    response = client.get("/stops")
+    assert response.status_code == 200
+    stops = response.json()
+    mirpur10 = next((s for s in stops if s["name_en"] == "Mirpur-10"), None)
+    assert mirpur10 is not None
+    assert "aliases" in mirpur10
+    assert any("mirpur 10" in a.lower() for a in mirpur10["aliases"])
+
+def test_mirpur_hyphen_space_equivalence():
+    response1 = client.get("/search?from_stop=Mirpur 10&to_stop=Gulshan 1")
+    assert response1.status_code == 200
+    response2 = client.get("/search?from_stop=Mirpur-10&to_stop=Gulshan-1")
+    assert response2.status_code == 200
+    assert len(response1.json()) == len(response2.json())
+
+def test_bahadur_shah_park_alias_resolution():
+    response = client.get("/search?from_stop=Bahadur Shah Park&to_stop=Airport")
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) > 0
+    assert any(r["type"] == "direct" for r in results)
+
+def test_mirpur_12_to_sadarghat_direct():
+    response = client.get("/search?from_stop=Mirpur-12&to_stop=Sadarghat")
+    assert response.status_code == 200
+    results = response.json()
+    assert any(r["type"] == "direct" and r["route_id"] == 271 for r in results)
+
 if __name__ == "__main__":
     tests = [
         test_health,
@@ -85,6 +114,10 @@ if __name__ == "__main__":
         test_suggestion_search,
         test_fuzzy_bengali_search,
         test_invalid_stop_not_found,
+        test_stops_include_aliases,
+        test_mirpur_hyphen_space_equivalence,
+        test_bahadur_shah_park_alias_resolution,
+        test_mirpur_12_to_sadarghat_direct,
     ]
 
     passed = 0

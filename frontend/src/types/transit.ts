@@ -2,6 +2,7 @@ export interface Stop {
   id: number;
   name_bn: string;
   name_en: string;
+  aliases?: string[];
 }
 
 export interface TransitLeg {

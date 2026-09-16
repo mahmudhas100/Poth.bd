@@ -5,6 +5,7 @@ class Stop(BaseModel):
     id: int
     name_bn: str
     name_en: str
+    aliases: List[str] = []
 
 class FareResult(BaseModel):
     type: str = "direct"
