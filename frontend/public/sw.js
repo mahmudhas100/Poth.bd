@@ -1,4 +1,4 @@
-const CACHE_NAME = 'poth-pwa-v1';
+const CACHE_NAME = 'poth-pwa-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.webmanifest',
@@ -11,8 +11,14 @@ const ASSETS_TO_CACHE = [
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
+    caches.open(CACHE_NAME).then(async (cache) => {
+      await Promise.allSettled(
+        ASSETS_TO_CACHE.map((asset) =>
+          cache.add(asset).catch((err) => {
+            console.warn('[SW] Cache item skipped:', asset, err);
+          })
+        )
+      );
     })
   );
 });

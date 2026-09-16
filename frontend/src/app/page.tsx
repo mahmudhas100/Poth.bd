@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { AlertCircleIcon, NavigationIcon } from "@/components/ui/Icons";
+import { AlertCircleIcon, NavigationIcon, DownloadIcon } from "@/components/ui/Icons";
 import { SearchHeader } from "@/components/SearchHeader";
 import { RouteSearchForm } from "@/components/RouteSearchForm";
 import { RouteModal } from "@/components/RouteModal";
@@ -27,6 +27,8 @@ export default function BusVaraApp() {
   const [recentSearches, setRecentSearches] = useState<{ from: string; to: string }[]>([]);
   const [isOffline, setIsOffline] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -48,8 +50,29 @@ export default function BusVaraApp() {
     window.addEventListener("offline", updateOnlineStatus);
     setIsOffline(!navigator.onLine);
 
-    // Deep linking check
     if (typeof window !== "undefined") {
+      if (
+        window.matchMedia("(display-mode: standalone)").matches ||
+        (window.navigator as any).standalone
+      ) {
+        setIsInstalled(true);
+      }
+
+      const handleBeforeInstall = (e: Event) => {
+        e.preventDefault();
+        setDeferredPrompt(e);
+      };
+
+      const handleAppInstalled = () => {
+        setDeferredPrompt(null);
+        setIsInstalled(true);
+        setToastMessage("অ্যাপটি সফলভাবে ইনস্টল করা হয়েছে!");
+      };
+
+      window.addEventListener("beforeinstallprompt", handleBeforeInstall);
+      window.addEventListener("appinstalled", handleAppInstalled);
+
+      // Deep linking check
       const params = new URLSearchParams(window.location.search);
       const urlFrom = params.get("from");
       const urlTo = params.get("to");
@@ -58,6 +81,13 @@ export default function BusVaraApp() {
         setToStop(urlTo);
         executeSearch(urlFrom, urlTo);
       }
+
+      return () => {
+        window.removeEventListener("online", updateOnlineStatus);
+        window.removeEventListener("offline", updateOnlineStatus);
+        window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+        window.removeEventListener("appinstalled", handleAppInstalled);
+      };
     }
 
     return () => {
@@ -178,6 +208,19 @@ export default function BusVaraApp() {
     setModalOpen(true);
   };
 
+  const handleInstallApp = async () => {
+    if (!deferredPrompt) return;
+    try {
+      deferredPrompt.prompt();
+      const choiceResult = await deferredPrompt.userChoice;
+      if (choiceResult.outcome === "accepted") {
+        setDeferredPrompt(null);
+      }
+    } catch (err) {
+      console.error("Install prompt error:", err);
+    }
+  };
+
   return (
     <main className="h-[100dvh] max-w-2xl mx-auto px-4 sm:px-5 pt-4 sm:pt-6 pb-2 sm:pb-4 relative z-10 flex flex-col overflow-hidden">
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
@@ -190,7 +233,12 @@ export default function BusVaraApp() {
       />
 
       {/* Hero Header */}
-      <SearchHeader isSearchExpanded={isSearchExpanded} isOffline={isOffline} />
+      <SearchHeader
+        isSearchExpanded={isSearchExpanded}
+        isOffline={isOffline}
+        canInstall={!isInstalled && !!deferredPrompt}
+        onInstall={handleInstallApp}
+      />
 
       {/* Search Section */}
       <RouteSearchForm
@@ -285,6 +333,16 @@ export default function BusVaraApp() {
 
       {/* Footer */}
       <footer className="shrink-0 mt-4 pt-4 border-t border-slate-200/60 flex flex-col items-center gap-2 relative z-10">
+        {!isInstalled && deferredPrompt && (
+          <button
+            onClick={handleInstallApp}
+            type="button"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 font-bengali font-semibold text-xs transition active:scale-95 hover:bg-blue-100 shadow-sm"
+          >
+            <DownloadIcon size={12} />
+            ডিভাইসে অ্যাপ ইনস্টল করুন
+          </button>
+        )}
         <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-400 text-center font-display">
           © 2026 Poth.bd • Nationwide Transit Navigator
         </p>
