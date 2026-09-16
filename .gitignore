@@ -44,3 +44,7 @@ backend/data/raw_json/
 *.db-wal
 *.db-journal
 
+# Internal tooling & data scripts
+scripts/
+
+

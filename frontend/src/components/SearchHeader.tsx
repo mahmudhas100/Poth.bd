@@ -1,20 +1,15 @@
 "use client";
 
 import React from "react";
-import { DownloadIcon } from "@/components/ui/Icons";
 
 interface SearchHeaderProps {
   isSearchExpanded: boolean;
   isOffline: boolean;
-  canInstall?: boolean;
-  onInstall?: () => void;
 }
 
 export const SearchHeader: React.FC<SearchHeaderProps> = ({
   isSearchExpanded,
   isOffline,
-  canInstall,
-  onInstall,
 }) => {
   return (
     <div
@@ -31,16 +26,6 @@ export const SearchHeader: React.FC<SearchHeaderProps> = ({
             </span>
             BRTA Official Fare 2026
           </div>
-          {canInstall && (
-            <button
-              onClick={onInstall}
-              type="button"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bengali font-semibold text-xs transition active:scale-95 shadow-sm shadow-blue-500/20"
-            >
-              <DownloadIcon size={14} />
-              অ্যাপ ইনস্টল করুন
-            </button>
-          )}
           {isOffline && (
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-800 font-bengali font-semibold text-xs animate-pulse">
               <span className="w-2 h-2 rounded-full bg-amber-500" />

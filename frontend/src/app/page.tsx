@@ -223,6 +223,19 @@ export default function BusVaraApp() {
 
   return (
     <main className="h-[100dvh] max-w-2xl mx-auto px-4 sm:px-5 pt-4 sm:pt-6 pb-2 sm:pb-4 relative z-10 flex flex-col overflow-hidden">
+      {/* Subtle Top-Right Install Icon */}
+      {!isInstalled && deferredPrompt && (
+        <button
+          onClick={handleInstallApp}
+          type="button"
+          title="অ্যাপ ইনস্টল করুন (Install App)"
+          className="absolute top-4 sm:top-6 right-4 sm:right-5 z-30 p-2.5 rounded-full bg-white/80 hover:bg-white text-slate-600 hover:text-accent border border-slate-200/80 shadow-sm backdrop-blur-md transition-all active:scale-95 animate-in fade-in group"
+        >
+          <DownloadIcon size={18} className="group-hover:translate-y-0.5 transition-transform text-slate-700 group-hover:text-accent" />
+          <span className="sr-only">অ্যাপ ইনস্টল করুন</span>
+        </button>
+      )}
+
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
 
       <RouteModal
@@ -236,8 +249,6 @@ export default function BusVaraApp() {
       <SearchHeader
         isSearchExpanded={isSearchExpanded}
         isOffline={isOffline}
-        canInstall={!isInstalled && !!deferredPrompt}
-        onInstall={handleInstallApp}
       />
 
       {/* Search Section */}
@@ -333,16 +344,6 @@ export default function BusVaraApp() {
 
       {/* Footer */}
       <footer className="shrink-0 mt-4 pt-4 border-t border-slate-200/60 flex flex-col items-center gap-2 relative z-10">
-        {!isInstalled && deferredPrompt && (
-          <button
-            onClick={handleInstallApp}
-            type="button"
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 font-bengali font-semibold text-xs transition active:scale-95 hover:bg-blue-100 shadow-sm"
-          >
-            <DownloadIcon size={12} />
-            ডিভাইসে অ্যাপ ইনস্টল করুন
-          </button>
-        )}
         <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-400 text-center font-display">
           © 2026 Poth.bd • Nationwide Transit Navigator
         </p>
