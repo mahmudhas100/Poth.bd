@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { AlertCircleIcon, NavigationIcon, DownloadIcon } from "@/components/ui/Icons";
+import { AlertCircleIcon, NavigationIcon, DownloadIcon, TrainIcon, BusIcon } from "@/components/ui/Icons";
 import { SearchHeader } from "@/components/SearchHeader";
 import { RouteSearchForm } from "@/components/RouteSearchForm";
 import { RouteModal } from "@/components/RouteModal";
@@ -15,10 +15,36 @@ import {
 import { fetchStops, searchFare } from "@/lib/api";
 import { Stop, SearchResult } from "@/types/transit";
 
+function getSearchResultMode(r: SearchResult): {
+  hasMetro: boolean;
+  hasBus: boolean;
+  isPureBus: boolean;
+  isPureMetro: boolean;
+} {
+  if (r.type === "suggestion") {
+    const isMetro = r.route.mode === "metro";
+    return { hasMetro: isMetro, hasBus: !isMetro, isPureBus: !isMetro, isPureMetro: isMetro };
+  }
+  if (r.type === "direct") {
+    const isMetro = r.mode === "metro";
+    return { hasMetro: isMetro, hasBus: !isMetro, isPureBus: !isMetro, isPureMetro: isMetro };
+  }
+  const leg1Metro = r.leg1.mode === "metro";
+  const leg2Metro = r.leg2.mode === "metro";
+  return {
+    hasMetro: leg1Metro || leg2Metro,
+    hasBus: !leg1Metro || !leg2Metro,
+    isPureBus: !leg1Metro && !leg2Metro,
+    isPureMetro: leg1Metro && leg2Metro,
+  };
+}
+
 export default function BusVaraApp() {
   const [fromStop, setFromStop] = useState("");
   const [toStop, setToStop] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [modeFilter, setModeFilter] = useState<"all" | "bus" | "metro">("all");
+  const [sortBy, setSortBy] = useState<"recommended" | "fare" | "distance">("recommended");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stops, setStops] = useState<Stop[]>([]);
@@ -135,6 +161,8 @@ export default function BusVaraApp() {
     try {
       const data = await searchFare(from, to);
       setResults(data);
+      setModeFilter("all");
+      setSortBy("recommended");
       setHasSearched(true);
       saveRecentSearch(from, to);
       setIsSearchExpanded(false);
@@ -173,8 +201,9 @@ export default function BusVaraApp() {
     distance: number,
     fare: number
   ) => {
+    const isMetro = routeName.includes("MRT") || routeName.includes("মেট্রোরেল");
     const shareUrl = `${window.location.origin}${window.location.pathname}?from=${encodeURIComponent(fromEn)}&to=${encodeURIComponent(toEn)}`;
-    const shareText = `🚌 ${fromBn} ⇄ ${toBn} (${routeName})\n💰 ভাড়া: ৳${fare} (${distance} কি.মি.)\n\nPoth.bd তে দেখুন: ${shareUrl}`;
+    const shareText = `${isMetro ? "🚇" : "🚌"} ${fromBn} ⇄ ${toBn} (${routeName})\n💰 ভাড়া: ৳${fare} (${distance} কি.মি.)\n\nPoth.bd তে দেখুন: ${shareUrl}`;
 
     if (navigator.share) {
       try {
@@ -284,53 +313,182 @@ export default function BusVaraApp() {
       <div className="flex-1 overflow-y-auto min-h-0 space-y-6 pb-2 pr-1 -mr-1 relative z-10">
         {loading && <SkeletonLoader />}
 
-        {!loading && results.length > 0 && (
-          <h2 className="text-[10px] uppercase tracking-[0.3em] font-extrabold text-slate-400 mb-6 flex items-center gap-4 font-display animate-in fade-in duration-500">
-            Available Routes ({results.length})
-            <div className="h-px flex-1 bg-gradient-to-r from-slate-200 to-transparent" />
-          </h2>
-        )}
+        {!loading && results.length > 0 && (() => {
+          const metroCount = results.filter((r) => getSearchResultMode(r).hasMetro).length;
+          const pureBusCount = results.filter((r) => getSearchResultMode(r).isPureBus).length;
+          const anyBusCount = results.filter((r) => getSearchResultMode(r).hasBus).length;
+          const busCount = pureBusCount > 0 ? pureBusCount : anyBusCount;
 
-        {!loading &&
-          results.map((res, i) => {
-            const animationClass = `animate-stagger-${Math.min(i + 1, 5)}`;
+          const filtered = results.filter((r) => {
+            if (modeFilter === "all") return true;
+            const modeInfo = getSearchResultMode(r);
+            if (modeFilter === "metro") return modeInfo.hasMetro;
+            if (modeFilter === "bus") return pureBusCount > 0 ? modeInfo.isPureBus : modeInfo.hasBus;
+            return true;
+          });
 
-            if (res.type === "suggestion") {
-              return (
-                <div key={i}>
-                  <SuggestionBanner suggestion={res} />
-                  <DirectRouteCard
-                    route={res.route}
+          const displayedResults = [...filtered].sort((a, b) => {
+            if (sortBy === "fare") {
+              const fareA = a.type === "direct" ? a.fare : a.type === "transit" ? a.total_fare : a.route.fare;
+              const fareB = b.type === "direct" ? b.fare : b.type === "transit" ? b.total_fare : b.route.fare;
+              return fareA - fareB;
+            }
+            if (sortBy === "distance") {
+              const distA = a.type === "direct" ? a.distance_km : a.type === "transit" ? a.total_distance_km : a.route.distance_km;
+              const distB = b.type === "direct" ? b.distance_km : b.type === "transit" ? b.total_distance_km : b.route.distance_km;
+              return distA - distB;
+            }
+            return 0; // Default backend priority (Metro pinned, then fare, then distance)
+          });
+
+          return (
+            <>
+              <div className="space-y-3 mb-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-[10px] uppercase tracking-[0.3em] font-extrabold text-slate-400 flex items-center gap-2 font-display animate-in fade-in duration-500">
+                      Available Routes ({displayedResults.length})
+                    </h2>
+                    <div className="h-px w-8 bg-gradient-to-r from-slate-200 to-transparent" />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Mode Filter Control */}
+                    {metroCount > 0 && busCount > 0 && (
+                      <div className="inline-flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 shadow-inner w-fit">
+                        <button
+                          onClick={() => setModeFilter("all")}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all font-display ${
+                            modeFilter === "all"
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-500 hover:text-slate-800"
+                          }`}
+                        >
+                          All ({results.length})
+                        </button>
+                        <button
+                          onClick={() => setModeFilter("metro")}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 font-display ${
+                            modeFilter === "metro"
+                              ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/20"
+                              : "text-emerald-700 hover:bg-emerald-50/80"
+                          }`}
+                        >
+                          <TrainIcon size={13} />
+                          <span>Metro ({metroCount})</span>
+                        </button>
+                        <button
+                          onClick={() => setModeFilter("bus")}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 font-display ${
+                            modeFilter === "bus"
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-500 hover:text-slate-800"
+                          }`}
+                        >
+                          <BusIcon size={13} />
+                          <span>Bus ({busCount})</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Sort Control */}
+                    {displayedResults.length > 1 && (
+                      <div className="inline-flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 shadow-inner w-fit">
+                        <button
+                          onClick={() => setSortBy("recommended")}
+                          title="মেট্রো ও সেরা ভাড়ার অগ্রাধিকার"
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all font-display ${
+                            sortBy === "recommended"
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-500 hover:text-slate-800"
+                          }`}
+                        >
+                          সুপারিশকৃত
+                        </button>
+                        <button
+                          onClick={() => setSortBy("fare")}
+                          title="সবচেয়ে কম ভাড়া আগে"
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all font-display ${
+                            sortBy === "fare"
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-500 hover:text-slate-800"
+                          }`}
+                        >
+                          কম ভাড়া
+                        </button>
+                        <button
+                          onClick={() => setSortBy("distance")}
+                          title="সবচেয়ে কম দূরত্ব আগে"
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all font-display ${
+                            sortBy === "distance"
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-500 hover:text-slate-800"
+                          }`}
+                        >
+                          কম দূরত্ব
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {displayedResults.map((res, i) => {
+                const animationClass = `animate-stagger-${Math.min(i + 1, 5)}`;
+
+                if (res.type === "suggestion") {
+                  return (
+                    <div key={i}>
+                      <SuggestionBanner suggestion={res} />
+                      <DirectRouteCard
+                        route={res.route}
+                        onOpenStops={openStopsModal}
+                        onShare={handleShare}
+                        animationClass={animationClass}
+                      />
+                    </div>
+                  );
+                }
+
+                if (res.type === "direct") {
+                  return (
+                    <DirectRouteCard
+                      key={i}
+                      route={res}
+                      onOpenStops={openStopsModal}
+                      onShare={handleShare}
+                      animationClass={animationClass}
+                    />
+                  );
+                }
+
+                return (
+                  <TransitRouteCard
+                    key={i}
+                    result={res}
                     onOpenStops={openStopsModal}
                     onShare={handleShare}
                     animationClass={animationClass}
                   />
+                );
+              })}
+
+              {displayedResults.length === 0 && (
+                <div className="text-center py-14 bg-white/50 backdrop-blur border border-slate-200 border-dashed rounded-3xl animate-in zoom-in-95 duration-500">
+                  <p className="text-slate-500 font-display font-medium text-base mb-3">
+                    এই ফিল্টারে কোনো রুট পাওয়া যায়নি।
+                  </p>
+                  <button
+                    onClick={() => setModeFilter("all")}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-700 transition-colors font-display"
+                  >
+                    সকল রুট দেখুন
+                  </button>
                 </div>
-              );
-            }
-
-            if (res.type === "direct") {
-              return (
-                <DirectRouteCard
-                  key={i}
-                  route={res}
-                  onOpenStops={openStopsModal}
-                  onShare={handleShare}
-                  animationClass={animationClass}
-                />
-              );
-            }
-
-            return (
-              <TransitRouteCard
-                key={i}
-                result={res}
-                onOpenStops={openStopsModal}
-                onShare={handleShare}
-                animationClass={animationClass}
-              />
-            );
-          })}
+              )}
+            </>
+          );
+        })()}
 
         {results.length === 0 && !loading && !error && fromStop && toStop && (
           <div className="text-center py-20 bg-white/50 backdrop-blur border border-slate-200 border-dashed rounded-3xl animate-in zoom-in-95 duration-500">

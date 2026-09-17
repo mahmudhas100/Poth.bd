@@ -9,7 +9,12 @@ class Settings(BaseModel):
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     CORS_ORIGINS: List[str] = ["*"]
     BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    DB_PATH: str = os.getenv("DB_PATH", os.path.join(BASE_DIR, "data", "busvara.db"))
+    DB_PATH: str = os.getenv(
+        "DB_PATH",
+        os.path.join(BASE_DIR, "data", "poth.db")
+        if os.path.exists(os.path.join(BASE_DIR, "data", "poth.db"))
+        else os.path.join(BASE_DIR, "data", "busvara.db")
+    )
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

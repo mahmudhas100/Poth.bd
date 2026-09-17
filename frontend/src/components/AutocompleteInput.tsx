@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { XIcon } from "@animateicons/react/lucide";
 import { Stop } from "@/types/transit";
+import { isMetroStation } from "@/lib/metro";
 
 interface AutocompleteInputProps {
   value: string;
@@ -218,33 +219,46 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
 
       {isOpen && filteredOptions.length > 0 && (
         <div className="absolute z-50 w-full mt-2 bg-white/95 backdrop-blur-xl border border-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] overflow-hidden max-h-80 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
-          {filteredOptions.map(({ stop: opt, matchedAlias }, idx) => (
-            <div
-              key={opt.id}
-              className={`px-5 py-3 cursor-pointer transition-colors border-b border-border/50 last:border-0 flex justify-between items-center ${
-                idx === selectedIndex ? "bg-accent/15 text-accent font-bold" : "hover:bg-accent/5 text-foreground/90"
-              }`}
-              onMouseEnter={() => setSelectedIndex(idx)}
-              onClick={() => {
-                onChange(opt.name_en);
-                setIsOpen(false);
-              }}
-            >
-              <div className="flex flex-col text-left">
-                <span className="font-bengali font-semibold text-sm leading-snug">
-                  {renderHighlightedText(opt.name_bn, value)}
+          {filteredOptions.map(({ stop: opt, matchedAlias }, idx) => {
+            const isMetro = isMetroStation(opt);
+            return (
+              <div
+                key={opt.id}
+                className={`px-5 py-3 cursor-pointer transition-colors border-b border-border/50 last:border-0 flex justify-between items-center gap-3 ${
+                  idx === selectedIndex ? "bg-accent/15 text-accent font-bold" : "hover:bg-accent/5 text-foreground/90"
+                }`}
+                onMouseEnter={() => setSelectedIndex(idx)}
+                onClick={() => {
+                  onChange(opt.name_en);
+                  setIsOpen(false);
+                }}
+              >
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  {isMetro && (
+                    <span
+                      className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[10px] tracking-tight shrink-0 shadow-xs shadow-emerald-600/30 border border-emerald-500 select-none"
+                      title="মেট্রোরেল স্টেশন • MRT Line-6"
+                    >
+                      M
+                    </span>
+                  )}
+                  <div className="flex flex-col text-left min-w-0">
+                    <span className="font-bengali font-semibold text-sm leading-snug truncate">
+                      {renderHighlightedText(opt.name_bn, value)}
+                    </span>
+                    {matchedAlias && (
+                      <span className="text-[11px] text-accent/80 font-normal truncate">
+                        {renderHighlightedText(matchedAlias, value)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className="font-display text-xs text-foreground/50 shrink-0">
+                  {renderHighlightedText(opt.name_en, value)}
                 </span>
-                {matchedAlias && (
-                  <span className="text-[11px] text-accent/80 font-normal">
-                    {renderHighlightedText(matchedAlias, value)}
-                  </span>
-                )}
               </div>
-              <span className="font-display text-xs text-foreground/50 ml-3 shrink-0">
-                {renderHighlightedText(opt.name_en, value)}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

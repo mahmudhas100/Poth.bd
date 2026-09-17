@@ -8,6 +8,8 @@ export interface Stop {
 export interface TransitLeg {
   route_id: number;
   route_name: string;
+  mode?: "bus" | "metro";
+  duration_mins?: number;
   from_stop: string;
   from_stop_bn: string;
   to_stop: string;
@@ -21,6 +23,8 @@ export interface DirectFareResult {
   type: "direct";
   route_id: number;
   route_name: string;
+  mode?: "bus" | "metro";
+  duration_mins?: number;
   from_stop: string;
   from_stop_bn: string;
   to_stop: string;

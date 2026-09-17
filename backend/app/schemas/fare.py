@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 
 class Stop(BaseModel):
@@ -9,6 +9,8 @@ class Stop(BaseModel):
 
 class FareResult(BaseModel):
     type: str = "direct"
+    mode: str = "bus"
+    duration_mins: Optional[int] = None
     route_id: int
     route_name: str
     from_stop: str
@@ -30,6 +32,8 @@ class SuggestionResult(BaseModel):
 class TransitLeg(BaseModel):
     route_id: int
     route_name: str
+    mode: str = "bus"
+    duration_mins: Optional[int] = None
     from_stop: str
     from_stop_bn: str
     to_stop: str

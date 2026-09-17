@@ -90,3 +90,22 @@ export const MapPinIcon: React.FC<IconProps> = ({ className, size = 24 }) => (
   </svg>
 );
 
+export const TrainIcon: React.FC<IconProps> = ({ className, size = 24 }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <rect width="16" height="16" x="4" y="3" rx="2" />
+    <path d="M4 11h16" />
+    <path d="M12 3v8" />
+    <path d="m8 19-2 3" />
+    <path d="m16 19 2 3" />
+    <circle cx="8" cy="15" r="1" />
+    <circle cx="16" cy="15" r="1" />
+  </svg>
+);
+
+export const ClockIcon: React.FC<IconProps> = ({ className, size = 24 }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+

@@ -1,19 +1,28 @@
 # Poth.bd (পথ) — Transit & Fare Engine
 
-> **সঠিক রুট, নির্ভুল ভাড়া — your simple journey path.**
+> **সঠিক রুট, নির্ভুল ভাড়া — your multi-modal journey companion for Dhaka.**
 
-Poth.bd is a high-performance, progressive public transit navigation system for Bangladesh. It indexes official BRTA bus routes, stop networks, and fare matrices, offering real-time fare calculations, transit transfer routing, fuzzy stop matching, and offline-first PWA support.
+Poth.bd is a high-performance, multi-modal public transit routing engine for Dhaka. It seamlessly integrates official BRTA city bus routes, the Dhaka Metro Rail (MRT Line-6 / DMTCL), real-time operational timetable awareness, hybrid transfers, and fuzzy stop search into a responsive, offline-ready progressive web app.
 
 ---
 
-## 🌟 Features
+## 🌟 Key Capabilities
 
-- **Direct Route & Fare Search**: Computes official BRTA distance-based bus fares and intermediate stop breakdown.
-- **Smart Transfer Routing**: Finds optimal 1-stop transfer itineraries when no direct bus connects origin and destination.
-- **Fuzzy Stop Matcher**: Resolves misspelled or localized stop names instantly (e.g., `Farmgate`, `ফার্মগেট`, `mirpur 10`).
-- **Share & Deep Linking**: Generates shareable URL links for routes with native Web Share API and clipboard copy fallback.
-- **Offline-First PWA**: Installable app with Service Worker caching and network resilience indicators.
-- **Clean Architecture**: Modular Next.js 16 frontend + async FastAPI backend with SQLite.
+- **Multi-Modal Transit Routing**: Queries direct bus routes, direct Dhaka Metro Rail (MRT Line-6), and hybrid multimodal transfers (Metro + Bus) with preference ranking and transfer-time penalties.
+- **Directional DMTCL Metro Timetable Engine**:
+  - Full operational schedule parsing matching official DMTCL guidelines.
+  - Distinguishes weekday vs. Friday operational profiles, peak vs. off-peak intervals (5–12 mins), and extended services (up to 22:46) for MRT/Rapid Pass holders.
+  - Real-time subtle operational status indicators (live status dot with active headway and operating window).
+- **Intelligent Stop Resolution & Search**:
+  - Real-time fuzzy Bengali & English search with sub-string and transliteration matching.
+  - Distinct emerald **M** badge beside Metro Rail stations in autocomplete results.
+  - Landmark aliasing (e.g. *Secretariat (Paltan)* aliased to *Paltan*, *Bahadur Shah Park* aliased to *Sadarghat*).
+- **Disambiguated Map Navigation**:
+  - Deep-linked Google Maps routing with station-specific POI resolution (e.g., appending "Metro Station" or landmark anchors) to eliminate map pin ambiguities.
+- **Offline-First PWA**:
+  - Installable progressive web application with Service Worker caching and network resilience indicators.
+- **Clean Microservice Architecture**:
+  - Next.js 16 (React 19, Turbopack, Tailwind CSS, TypeScript) paired with an async FastAPI backend running SQLite with WAL-mode concurrency.
 
 ---
 
@@ -23,22 +32,24 @@ Poth.bd is a high-performance, progressive public transit navigation system for 
 Poth.bd/
 ├── frontend/             # Next.js 16 (App Router, Tailwind CSS, TypeScript, PWA)
 │   ├── src/
-│   │   ├── app/          # App shell, Layouts, Page
-│   │   ├── components/   # Modular UI Components (RouteCards, RouteSearchForm, Toast, Modal)
-│   │   ├── lib/          # API Services & Client Utilities
-│   │   └── types/        # Domain Types & Models
-│   ├── public/           # PWA Manifest & Icons
+│   │   ├── app/          # App Shell, Routing, Layouts, Metadata
+│   │   ├── components/   # UI Components (AutocompleteInput, RouteCards, RouteSearchForm, Modal)
+│   │   ├── lib/          # API Client, DMTCL Metro Timetable Engine, Maps POI Resolvers
+│   │   └── types/        # TypeScript Interfaces & Multi-Modal Transit Contracts
+│   ├── public/           # PWA Manifest, Icons & Service Worker
 │   └── Dockerfile
 │
 ├── backend/              # FastAPI Python Microservice
 │   ├── app/
 │   │   ├── api/          # REST Endpoints (/search, /stops, /health)
-│   │   ├── core/         # Settings & Config
-│   │   ├── db/           # SQLite Connection Context Manager
-│   │   ├── schemas/      # Pydantic Request/Response Models
-│   │   └── services/     # Domain Logic, Fuzzy Stop Cache & Fare Math
-│   ├── data/             # Bus Fare Database (busvara.db)
-│   └── Dockerfile
+│   │   ├── core/         # Settings, Security Middleware & Concurrency Setup
+│   │   ├── db/           # SQLite Session Context Manager (WAL Mode, Read-Only pool)
+│   │   ├── schemas/      # Pydantic v2 Request/Response Validation Models
+│   │   └── services/     # Multi-Modal Routing Engine, Fuzzy Stop Cache & Fare Math
+│   ├── data/             # Normalized Transit Database (poth.db)
+│   ├── tests/            # Automated Unit & Integration Test Suite
+│   ├── Dockerfile
+│   └── fly.toml          # Fly.io Production Configuration
 │
 └── docker-compose.yml    # Unified 1-Command Startup
 ```
@@ -49,25 +60,30 @@ Poth.bd/
 
 ### 1. Using Docker (Recommended)
 
-Run the unified stack with a single command:
+Run the entire stack with Docker Compose:
 
 ```bash
 docker-compose up --build
 ```
 
-- **Frontend**: `http://localhost:3000`
+- **Frontend App**: `http://localhost:3000`
 - **Backend API**: `http://localhost:8000`
-- **API Docs (Swagger)**: `http://localhost:8000/docs`
+- **Interactive Swagger Docs**: `http://localhost:8000/docs`
 
-### 2. Manual Local Setup
+### 2. Manual Local Development
 
 #### Backend (FastAPI)
 ```bash
 cd backend
-python -m venv venv
-# On Windows: venv\Scripts\activate | On Linux/macOS: source venv/bin/activate
+python -m venv .venv
+# Windows: .venv\Scripts\activate | Linux/macOS: source .venv/bin/activate
 pip install -r requirements.txt
 python main.py
+```
+
+Run test suite:
+```bash
+python tests/test_api.py
 ```
 
 #### Frontend (Next.js)
@@ -77,28 +93,32 @@ npm install
 npm run dev
 ```
 
----
-
-## 📊 Database Schema
-
-Poth.bd operates on a normalized SQLite schema (`data/busvara.db`):
-- `stops`: Master stop register (ID, English Name, Bengali Name).
-- `stop_aliases`: Normalized search variations and spelling aliases.
-- `routes`: Official route definitions.
-- `route_stops`: Ordered stop listings with cumulative distances (km).
-- `fares`: Official fare matrices between key stop pairs.
+Production build:
+```bash
+npm run build
+```
 
 ---
 
-## 🏛️ Data Sources & References
+## 📊 Database Architecture
 
-Route networks, stoppage sequences, and fare matrices are indexed directly from official public fare notifications and gazettes issued by the **Bangladesh Road Transport Authority (BRTA)**:
-- **Official BRTA Portal**: [brta.gov.bd](http://www.brta.gov.bd/)
-- **Fare Chart Notifications**: [BRTA Bus Fare Notifications & Circulars](http://www.brta.gov.bd/site/view/notices)
+Poth.bd operates on a normalized SQLite schema (`backend/data/poth.db`):
+- `stops`: Master stop and station register (ID, English Name, Bengali Name).
+- `stop_aliases`: Search variations, colloquial names, and station landmark aliases.
+- `routes`: Official route definitions, mode identifiers (`bus`, `metro`), and operator details.
+- `route_stops`: Sequential stoppage orders with cumulative point-to-point distances (km).
+- `fares`: Distance-based fare matrices and flat fare mappings across stop pairs.
+
+---
+
+## 🏛️ Official Data References
+
+Transit networks, stoppage sequences, and fare calculations are indexed from official notifications:
+- **BRTA (Bangladesh Road Transport Authority)**: Official city bus fare gazettes and stoppage notifications ([brta.gov.bd](http://www.brta.gov.bd/)).
+- **DMTCL (Dhaka Mass Transit Company Limited)**: Dhaka Metro Rail MRT Line-6 operational guidelines, station matrix, and timetable circulars ([dmtcl.gov.bd](https://dmtcl.gov.bd/)).
 
 ---
 
 ## 📄 License
 
 MIT License © 2026 Poth.bd Team.
-

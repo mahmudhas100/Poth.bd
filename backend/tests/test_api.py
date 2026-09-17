@@ -132,6 +132,77 @@ def test_health_exempt_from_rate_limit():
         res = client.get("/health", headers=headers)
         assert res.status_code == 200
 
+def test_mrt_direct_search():
+    response = client.get("/search?from_stop=Mirpur 10&to_stop=Farmgate")
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) > 0
+    top = results[0]
+    assert top["mode"] == "metro"
+    assert top["fare"] == 30
+    assert "MRT Line-6" in top["route_name"]
+    assert top["duration_mins"] is not None
+    assert 8 <= top["duration_mins"] <= 12
+    # Ensure bus routes are also returned below metro
+    assert any(r["mode"] == "bus" for r in results)
+
+def test_mrt_full_line():
+    response = client.get("/search?from_stop=Uttara North&to_stop=Motijheel")
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) > 0
+    top = results[0]
+    assert top["mode"] == "metro"
+    assert top["fare"] == 100
+    assert top["distance_km"] >= 20.0
+    assert top["duration_mins"] >= 30
+
+def test_mrt_short_hop():
+    response = client.get("/search?from_stop=Kazipara&to_stop=Shewrapara")
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) > 0
+    top = results[0]
+    assert top["mode"] == "metro"
+    assert top["fare"] == 20
+    assert top["duration_mins"] == 2
+
+def test_mrt_station_aliases():
+    # Test Diabari resolves to Uttara North
+    res1 = client.get("/search?from_stop=Diabari&to_stop=Motijheel")
+    assert res1.status_code == 200
+    assert res1.json()[0]["mode"] == "metro"
+    assert res1.json()[0]["fare"] == 100
+
+    # Test TSC resolves to Dhaka University
+    res2 = client.get("/search?from_stop=Mirpur 10&to_stop=TSC")
+    assert res2.status_code == 200
+    assert res2.json()[0]["mode"] == "metro"
+    assert res2.json()[0]["fare"] == 50
+
+    # Test Secretariat resolves
+    res3 = client.get("/search?from_stop=Secretariat&to_stop=Farmgate")
+    assert res3.status_code == 200
+    assert res3.json()[0]["mode"] == "metro"
+    assert res3.json()[0]["fare"] == 30
+
+    # Test Bahadur Shah Park resolves
+    res4 = client.get("/search?from_stop=Mirpur 10&to_stop=Bahadur Shah Park")
+    assert res4.status_code == 200
+    assert len(res4.json()) > 0
+    assert any("Bahadur Shah Park" in (r.get("to_stop") or "") or "Bahadur Shah Park" in (r.get("leg2", {}).get("to_stop") or "") for r in res4.json())
+
+def test_hybrid_metro_transit():
+    # Uttara North to Sayedabad has direct buses, but should also return hybrid metro transits
+    res = client.get("/search?from_stop=Uttara North&to_stop=Sayedabad")
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data) > 0
+    metro_transits = [r for r in data if "leg1" in r and (r["leg1"]["mode"] == "metro" or r["leg2"]["mode"] == "metro")]
+    assert len(metro_transits) > 0
+    # Should transfer at Motijheel or Secretariat (Paltan) to maximize metro travel distance
+    assert metro_transits[0]["transfer_at"] in ["Motijheel", "Secretariat (Paltan)"]
+
 if __name__ == "__main__":
     tests = [
         test_health,
@@ -147,6 +218,11 @@ if __name__ == "__main__":
         test_mirpur_hyphen_space_equivalence,
         test_bahadur_shah_park_alias_resolution,
         test_mirpur_12_to_sadarghat_direct,
+        test_mrt_direct_search,
+        test_mrt_full_line,
+        test_mrt_short_hop,
+        test_mrt_station_aliases,
+        test_hybrid_metro_transit,
         test_security_headers,
         test_query_length_validation,
         test_rate_limiting,
@@ -163,4 +239,3 @@ if __name__ == "__main__":
             print(f"✗ {t.__name__} FAILED: {e}")
             raise e
     print(f"\nAll {passed}/{len(tests)} tests passed successfully!")
-

@@ -5,7 +5,7 @@ Automating bus fare data extraction from BRTA PDF fare charts into a structured 
 
 ## Project Structure
 - `app/`: FastAPI application (Phase 2)
-- `data/`: Final database (`busvara.db`) and normalized stop data
+- `data/`: Final database (`poth.db`) and normalized stop data
 - `scripts/`: Data processing, normalization, and migration scripts
 - `raw_data/`: Original PDFs and extracted page images
 
@@ -17,5 +17,5 @@ Automating bus fare data extraction from BRTA PDF fare charts into a structured 
       `python -c "import json; json.load(open('path/to/file.json', encoding='utf-8'))"`
 
 ## Core References
-- Database: `data/busvara.db`
+- Database: `data/poth.db`
 - Master Stops: `data/master_stops.json`
