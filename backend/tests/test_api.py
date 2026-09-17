@@ -103,6 +103,35 @@ def test_mirpur_12_to_sadarghat_direct():
     results = response.json()
     assert any(r["type"] == "direct" and r["route_id"] == 271 for r in results)
 
+def test_security_headers():
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.headers.get("x-content-type-options") == "nosniff"
+    assert response.headers.get("x-frame-options") == "DENY"
+
+def test_query_length_validation():
+    # Long query over 60 characters must be rejected immediately with 422
+    long_query = "A" * 65
+    response = client.get(f"/search?from_stop={long_query}&to_stop=Farmgate")
+    assert response.status_code == 422
+
+def test_rate_limiting():
+    # Sending more than 60 requests to /search from same client IP triggers 429
+    headers = {"x-forwarded-for": "198.51.100.1"}
+    status_codes = []
+    for _ in range(65):
+        res = client.get("/search?from_stop=Mirpur 10&to_stop=Farmgate", headers=headers)
+        status_codes.append(res.status_code)
+    
+    assert 429 in status_codes
+    assert 200 in status_codes
+
+def test_health_exempt_from_rate_limit():
+    headers = {"x-forwarded-for": "198.51.100.2"}
+    for _ in range(70):
+        res = client.get("/health", headers=headers)
+        assert res.status_code == 200
+
 if __name__ == "__main__":
     tests = [
         test_health,
@@ -118,6 +147,10 @@ if __name__ == "__main__":
         test_mirpur_hyphen_space_equivalence,
         test_bahadur_shah_park_alias_resolution,
         test_mirpur_12_to_sadarghat_direct,
+        test_security_headers,
+        test_query_length_validation,
+        test_rate_limiting,
+        test_health_exempt_from_rate_limit,
     ]
 
     passed = 0

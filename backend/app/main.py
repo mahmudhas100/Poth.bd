@@ -15,6 +15,8 @@ async def lifespan(app: FastAPI):
     # Shutdown logic (if needed)
 
 
+from app.core.security_middleware import SecurityAndRateLimitMiddleware
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.PROJECT_NAME,
@@ -23,6 +25,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan
     )
 
+    app.add_middleware(SecurityAndRateLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,

@@ -1,12 +1,12 @@
 from typing import List, Optional
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from app.db.session import get_db
 from app.schemas.fare import Stop
 
 router = APIRouter()
 
 @router.get("/stops", response_model=List[Stop])
-async def get_stops(q: Optional[str] = None):
+async def get_stops(q: Optional[str] = Query(None, max_length=60)):
     with get_db() as conn:
         c = conn.cursor()
         

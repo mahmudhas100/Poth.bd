@@ -75,7 +75,7 @@ def resolve_stop_fuzzy(query: str):
         init_stop_cache()
 
     q = query.strip().lower()
-    if not q:
+    if not q or len(q) > 60:
         return None
     
     # 1. Direct Hit
