@@ -66,6 +66,34 @@ export interface GroupedDirectResult {
   routes: DirectFareResult[];
 }
 
+export interface GroupedTransitLeg {
+  from_stop: string;
+  from_stop_bn: string;
+  to_stop: string;
+  to_stop_bn: string;
+  mode?: "bus" | "metro";
+  min_fare: number;
+  max_fare: number;
+  min_distance_km: number;
+  max_distance_km: number;
+  duration_mins?: number;
+  routes: TransitLeg[];
+}
+
+export interface GroupedTransitResult {
+  type: "grouped_transit";
+  transfer_at: string;
+  transfer_at_bn: string;
+  min_fare: number;
+  max_fare: number;
+  total_fare: number;
+  min_distance_km: number;
+  max_distance_km: number;
+  total_distance_km: number;
+  leg1: GroupedTransitLeg;
+  leg2: GroupedTransitLeg;
+}
+
 export type SearchResult = DirectFareResult | TransitResult | SuggestionResult;
-export type DisplayResult = SearchResult | GroupedDirectResult;
+export type DisplayResult = SearchResult | GroupedDirectResult | GroupedTransitResult;
 

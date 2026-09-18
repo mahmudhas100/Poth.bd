@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { SearchIcon, MoveRightIcon } from "@animateicons/react/lucide";
 import { BusIcon, NavigationIcon, RouteDistanceIcon, ShareIcon, MapPinIcon, TrainIcon, ClockIcon } from "@/components/ui/Icons";
-import { DirectFareResult, TransitResult, SuggestionResult, GroupedDirectResult } from "@/types/transit";
+import { DirectFareResult, TransitResult, SuggestionResult, GroupedDirectResult, GroupedTransitResult } from "@/types/transit";
 import { getGoogleMapsDirectionUrl } from "@/lib/maps";
 import { getMetroLiveStatus } from "@/lib/metro";
 
@@ -522,6 +522,316 @@ export const GroupedRouteCard: React.FC<GroupedRouteCardProps> = ({
             title="Share Fare Details"
           >
             <ShareIcon size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface GroupedTransitCardProps {
+  result: GroupedTransitResult;
+  onOpenStops: (stops: string[], title: string) => void;
+  onShare: (fromBn: string, toBn: string, fromEn: string, toEn: string, routeName: string, distance: number, fare: number) => void;
+  animationClass?: string;
+}
+
+export const GroupedTransitCard: React.FC<GroupedTransitCardProps> = ({
+  result,
+  onOpenStops,
+  onShare,
+  animationClass = "",
+}) => {
+  const [expandedLeg1, setExpandedLeg1] = useState(false);
+  const [expandedLeg2, setExpandedLeg2] = useState(false);
+
+  const leg1MetroStatus = result.leg1.mode === "metro" ? getMetroLiveStatus(result.leg1.from_stop, result.leg1.to_stop) : null;
+  const leg2MetroStatus = result.leg2.mode === "metro" ? getMetroLiveStatus(result.leg2.from_stop, result.leg2.to_stop) : null;
+  const hasMetro = Boolean(leg1MetroStatus || leg2MetroStatus);
+
+  const hasFareRange = result.min_fare !== result.max_fare;
+  const hasDistRange = result.min_distance_km !== result.max_distance_km;
+  const totalBusOptions = result.leg1.routes.length + result.leg2.routes.length;
+
+  return (
+    <div className={`transit-card ${animationClass}`}>
+      <div className="space-y-6">
+        <div className="flex flex-row items-center justify-between gap-3 sm:gap-4 border-b border-slate-100 pb-6">
+          <div className="space-y-2 min-w-0 flex-1">
+            {hasMetro ? (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-emerald-50 to-amber-50 text-emerald-900 border border-emerald-200/90 rounded-md font-bold text-[9px] uppercase tracking-widest font-display shadow-2xs">
+                <span className="flex items-center gap-1 text-emerald-700">
+                  <TrainIcon size={11} /> মেট্রোরেল
+                </span>
+                <span className="text-slate-400 font-bold">+</span>
+                <span className="flex items-center gap-1 text-amber-700">
+                  <BusIcon size={11} /> বাস
+                </span>
+                <span className="text-emerald-800">• Hybrid Transit</span>
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-amber-50 text-amber-600 rounded-md font-bold text-[9px] uppercase tracking-widest font-display">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                Transit Required • বাস পরিবর্তন ({totalBusOptions} বিকল্প)
+              </div>
+            )}
+            <h3 className="text-xl sm:text-2xl md:text-3xl leading-tight font-bengali font-bold text-slate-900 truncate whitespace-normal">
+              {result.leg1.from_stop_bn} <MoveRightIcon className="inline opacity-30 mx-0.5 sm:mx-1" size={20} /> {result.leg2.to_stop_bn}
+            </h3>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-slate-500 text-xs sm:text-sm font-bengali font-medium">
+              <div className="flex items-center">
+                <span className="font-bold text-amber-600 bg-amber-50 px-1 sm:px-2 py-0.5 rounded mr-1">
+                  {result.transfer_at_bn}
+                </span>
+                {hasMetro ? "-এ পরিবর্তন করুন" : "-এ বাস বদলান"}
+              </div>
+              <span className="text-slate-300 hidden sm:inline">•</span>
+              <div className="flex items-center gap-1.5">
+                <RouteDistanceIcon size={14} className="text-slate-400 shrink-0" />
+                <span>
+                  মোট <span className="font-display font-bold text-slate-700">{hasDistRange ? `${result.min_distance_km}–${result.max_distance_km}` : result.min_distance_km}</span> কি.মি.
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col items-end justify-center shrink-0">
+            <div className="text-4xl sm:text-5xl md:text-6xl fare-number-accent whitespace-nowrap">
+              <span className="text-2xl sm:text-3xl opacity-50 font-bengali font-normal mr-1">৳</span>
+              {hasFareRange ? `${result.min_fare}–${result.max_fare}` : result.min_fare}
+            </div>
+            <p className="text-slate-400 text-[9px] uppercase tracking-[0.2em] font-display font-bold mt-1 whitespace-nowrap">
+              {hasFareRange ? "Fare Range" : "Total Fare"}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 relative">
+          <div className="absolute left-[27px] top-8 bottom-8 w-0.5 bg-slate-200 z-0" />
+
+          {/* Leg 1 */}
+          <div className={`bg-white border rounded-2xl transition-all relative z-10 overflow-hidden ${
+            result.leg1.mode === "metro" ? "border-emerald-200" : "border-slate-100"
+          }`}>
+            <div
+              onClick={() => {
+                if (result.leg1.routes.length === 1) {
+                  onOpenStops(result.leg1.routes[0].stops, `Leg 1: ${result.leg1.routes[0].route_name}`);
+                } else {
+                  setExpandedLeg1(!expandedLeg1);
+                }
+              }}
+              className="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50/50 transition-colors group"
+            >
+              <div className="flex items-center gap-4 min-w-0 flex-1">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border transition-colors ${
+                  result.leg1.mode === "metro"
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 group-hover:bg-emerald-600 group-hover:text-white"
+                    : "bg-blue-50 text-blue-600 border-blue-100 group-hover:bg-blue-600 group-hover:text-white"
+                }`}>
+                  {result.leg1.mode === "metro" ? <TrainIcon size={18} /> : "1"}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-bold text-lg font-bengali text-slate-800 truncate">
+                    {result.leg1.from_stop_bn} ⇄ {result.leg1.to_stop_bn}
+                  </h4>
+                  <div className="text-sm text-slate-500 font-bengali font-medium flex items-center gap-2 flex-wrap mt-0.5">
+                    {result.leg1.routes.length === 1 ? (
+                      <span>রুট: {result.leg1.routes[0].route_name}</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-accent font-display font-bold bg-blue-50 px-2 py-0.5 rounded-md">
+                        <BusIcon size={12} /> {result.leg1.routes.length} টি বাস বিকল্প ({expandedLeg1 ? "লুকান" : "দেখুন"})
+                      </span>
+                    )}
+                    {result.leg1.duration_mins ? (
+                      <span className="text-xs text-slate-400 font-normal">({result.leg1.duration_mins} মি.)</span>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 shrink-0 ml-2">
+                <div className={`text-xl sm:text-2xl fare-number whitespace-nowrap ${
+                  result.leg1.mode === "metro" ? "text-emerald-700" : "text-slate-600"
+                }`}>
+                  ৳{result.leg1.min_fare === result.leg1.max_fare ? result.leg1.min_fare : `${result.leg1.min_fare}–${result.leg1.max_fare}`}
+                </div>
+                {result.leg1.routes.length > 1 && (
+                  <svg
+                    className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedLeg1 ? "rotate-180" : ""}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                )}
+              </div>
+            </div>
+
+            {/* Leg 1 Route Accordion */}
+            {expandedLeg1 && result.leg1.routes.length > 1 && (
+              <div className="border-t border-slate-100 bg-slate-50/50 p-2.5 space-y-1.5 animate-in slide-in-from-top-2 duration-200">
+                {result.leg1.routes.map((rt, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => onOpenStops(rt.stops, `Leg 1: ${rt.route_name}`)}
+                    className="flex items-center justify-between px-3 py-2 bg-white border border-slate-100 rounded-lg hover:border-accent/30 hover:shadow-sm cursor-pointer transition-all group/sub"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div className="w-5 h-5 rounded-full bg-blue-50 text-accent text-[9px] font-bold font-display flex items-center justify-center shrink-0 border border-blue-100 group-hover/sub:bg-accent group-hover/sub:text-white transition-colors">
+                        {idx + 1}
+                      </div>
+                      <p className="text-xs sm:text-sm font-bengali font-medium text-slate-700 truncate">
+                        {rt.route_name}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0 ml-2">
+                      <span className="text-[11px] text-slate-400 font-display font-medium">
+                        {rt.distance_km} কি.মি.
+                      </span>
+                      <span className="text-xs sm:text-sm font-bold text-slate-700 font-display">
+                        ৳{rt.fare}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-center py-2 relative z-10">
+            <div className="bg-amber-100/50 backdrop-blur-sm border border-amber-200/50 text-[10px] font-bold text-amber-700 px-4 py-1.5 rounded-full uppercase tracking-widest font-display shadow-sm">
+              Change at {result.transfer_at_bn}
+            </div>
+          </div>
+
+          {/* Leg 2 */}
+          <div className={`bg-white border rounded-2xl transition-all relative z-10 overflow-hidden ${
+            result.leg2.mode === "metro" ? "border-emerald-200" : "border-slate-100"
+          }`}>
+            <div
+              onClick={() => {
+                if (result.leg2.routes.length === 1) {
+                  onOpenStops(result.leg2.routes[0].stops, `Leg 2: ${result.leg2.routes[0].route_name}`);
+                } else {
+                  setExpandedLeg2(!expandedLeg2);
+                }
+              }}
+              className="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50/50 transition-colors group"
+            >
+              <div className="flex items-center gap-4 min-w-0 flex-1">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border transition-colors ${
+                  result.leg2.mode === "metro"
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 group-hover:bg-emerald-600 group-hover:text-white"
+                    : "bg-emerald-50 text-emerald-600 border-emerald-100 group-hover:bg-emerald-500 group-hover:text-white"
+                }`}>
+                  {result.leg2.mode === "metro" ? <TrainIcon size={18} /> : "2"}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-bold text-lg font-bengali text-slate-800 truncate">
+                    {result.leg2.from_stop_bn} ⇄ {result.leg2.to_stop_bn}
+                  </h4>
+                  <div className="text-sm text-slate-500 font-bengali font-medium flex items-center gap-2 flex-wrap mt-0.5">
+                    {result.leg2.routes.length === 1 ? (
+                      <span>রুট: {result.leg2.routes[0].route_name}</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 font-display font-bold bg-emerald-50 px-2 py-0.5 rounded-md">
+                        <BusIcon size={12} /> {result.leg2.routes.length} টি বাস বিকল্প ({expandedLeg2 ? "লুকান" : "দেখুন"})
+                      </span>
+                    )}
+                    {result.leg2.duration_mins ? (
+                      <span className="text-xs text-slate-400 font-normal">({result.leg2.duration_mins} মি.)</span>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 shrink-0 ml-2">
+                <div className={`text-xl sm:text-2xl fare-number whitespace-nowrap ${
+                  result.leg2.mode === "metro" ? "text-emerald-700" : "text-slate-600"
+                }`}>
+                  ৳{result.leg2.min_fare === result.leg2.max_fare ? result.leg2.min_fare : `${result.leg2.min_fare}–${result.leg2.max_fare}`}
+                </div>
+                {result.leg2.routes.length > 1 && (
+                  <svg
+                    className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedLeg2 ? "rotate-180" : ""}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                )}
+              </div>
+            </div>
+
+            {/* Leg 2 Route Accordion */}
+            {expandedLeg2 && result.leg2.routes.length > 1 && (
+              <div className="border-t border-slate-100 bg-slate-50/50 p-2.5 space-y-1.5 animate-in slide-in-from-top-2 duration-200">
+                {result.leg2.routes.map((rt, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => onOpenStops(rt.stops, `Leg 2: ${rt.route_name}`)}
+                    className="flex items-center justify-between px-3 py-2 bg-white border border-slate-100 rounded-lg hover:border-emerald-300 hover:shadow-sm cursor-pointer transition-all group/sub"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 text-[9px] font-bold font-display flex items-center justify-center shrink-0 border border-emerald-100 group-hover/sub:bg-emerald-600 group-hover/sub:text-white transition-colors">
+                        {idx + 1}
+                      </div>
+                      <p className="text-xs sm:text-sm font-bengali font-medium text-slate-700 truncate">
+                        {rt.route_name}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0 ml-2">
+                      <span className="text-[11px] text-slate-400 font-display font-medium">
+                        {rt.distance_km} কি.মি.
+                      </span>
+                      <span className="text-xs sm:text-sm font-bold text-slate-700 font-display">
+                        ৳{rt.fare}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <a
+            href={getGoogleMapsDirectionUrl(
+              result.leg1.from_stop,
+              result.leg2.to_stop,
+              {
+                originIsMetro: result.leg1.mode === "metro",
+                destIsMetro: result.leg2.mode === "metro",
+              }
+            )}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 py-3 bg-slate-50/50 hover:bg-emerald-50 border border-slate-200/60 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-emerald-600 hover:border-emerald-200 transition-all flex items-center justify-center gap-2 group font-display"
+            title="গুগল ম্যাপে ট্রানজিট ডিরেকশন দেখুন (Google Maps)"
+          >
+            <MapPinIcon size={14} className="group-hover:scale-110 text-emerald-600 transition-transform" />
+            Maps Direction
+          </a>
+          <button
+            onClick={() =>
+              onShare(
+                result.leg1.from_stop_bn,
+                result.leg2.to_stop_bn,
+                result.leg1.from_stop,
+                result.leg2.to_stop,
+                `Transit via ${result.transfer_at_bn}`,
+                result.total_distance_km,
+                result.total_fare
+              )
+            }
+            className="px-4 py-3 bg-slate-50/50 hover:bg-amber-50 border border-slate-200/60 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-amber-600 hover:border-amber-200 transition-all flex items-center justify-center gap-2 group font-display"
+            title="Share Transit Details"
+          >
+            <ShareIcon size={14} className="group-hover:scale-110 transition-transform" />
+            <span className="hidden sm:inline">Share</span>
           </button>
         </div>
       </div>

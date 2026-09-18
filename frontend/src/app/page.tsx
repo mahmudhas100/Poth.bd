@@ -10,11 +10,12 @@ import {
   DirectRouteCard,
   TransitRouteCard,
   GroupedRouteCard,
+  GroupedTransitCard,
   SuggestionBanner,
   SkeletonLoader,
 } from "@/components/RouteCards";
 import { fetchStops, searchFare } from "@/lib/api";
-import { Stop, SearchResult, DisplayResult, GroupedDirectResult } from "@/types/transit";
+import { Stop, SearchResult, DisplayResult, GroupedDirectResult, GroupedTransitResult } from "@/types/transit";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -54,50 +55,155 @@ function getDisplayResultMode(r: DisplayResult): {
   if (r.type === "grouped") {
     return { hasMetro: false, hasBus: true, isPureBus: true, isPureMetro: false };
   }
+  if (r.type === "grouped_transit") {
+    const leg1Metro = r.leg1.mode === "metro";
+    const leg2Metro = r.leg2.mode === "metro";
+    return {
+      hasMetro: leg1Metro || leg2Metro,
+      hasBus: !leg1Metro || !leg2Metro,
+      isPureBus: !leg1Metro && !leg2Metro,
+      isPureMetro: leg1Metro && leg2Metro,
+    };
+  }
   return getSearchResultMode(r);
 }
 
 /**
- * Groups direct bus results that share the same from/to stops into
- * a single consolidated card while strictly preserving in-place result order.
- * Metro and transit results pass through unchanged.
+ * Consolidates:
+ * 1. Direct bus results sharing same origin and destination into a single card.
+ * 2. Transit results sharing the same transfer station and origin/destination into a single card.
+ * Preserves strict in-place result order.
  */
-function groupBusResults(results: SearchResult[]): DisplayResult[] {
+function consolidateSearchResults(results: SearchResult[]): DisplayResult[] {
   const output: DisplayResult[] = [];
-  const busGroupIndices = new Map<string, number>();
+  const directGroupIndices = new Map<string, number>();
+  const transitGroupIndices = new Map<string, number>();
 
   for (const r of results) {
     if (r.type === "direct" && r.mode !== "metro") {
       const key = `${r.from_stop}::${r.to_stop}`;
-      const existingIdx = busGroupIndices.get(key);
+      const existingIdx = directGroupIndices.get(key);
       if (existingIdx !== undefined) {
         const item = output[existingIdx];
         if (item.type === "grouped") {
-          item.routes.push(r);
-          item.min_fare = Math.min(item.min_fare, r.fare);
-          item.max_fare = Math.max(item.max_fare, r.fare);
-          item.min_distance_km = Math.round(Math.min(item.min_distance_km, r.distance_km) * 10) / 10;
-          item.max_distance_km = Math.round(Math.max(item.max_distance_km, r.distance_km) * 10) / 10;
+          // Avoid duplicate routes with same route_name & fare
+          if (!item.routes.some((x) => x.route_name === r.route_name && x.fare === r.fare)) {
+            item.routes.push(r);
+            item.min_fare = Math.min(item.min_fare, r.fare);
+            item.max_fare = Math.max(item.max_fare, r.fare);
+            item.min_distance_km = Math.round(Math.min(item.min_distance_km, r.distance_km) * 10) / 10;
+            item.max_distance_km = Math.round(Math.max(item.max_distance_km, r.distance_km) * 10) / 10;
+          }
         } else if (item.type === "direct") {
           const firstRoute = item;
-          const routes = [firstRoute, r];
-          const fares = [firstRoute.fare, r.fare];
-          const dists = [firstRoute.distance_km, r.distance_km];
-          output[existingIdx] = {
-            type: "grouped",
-            from_stop: firstRoute.from_stop,
-            from_stop_bn: firstRoute.from_stop_bn,
-            to_stop: firstRoute.to_stop,
-            to_stop_bn: firstRoute.to_stop_bn,
-            min_fare: Math.min(...fares),
-            max_fare: Math.max(...fares),
-            min_distance_km: Math.round(Math.min(...dists) * 10) / 10,
-            max_distance_km: Math.round(Math.max(...dists) * 10) / 10,
-            routes,
-          } satisfies GroupedDirectResult;
+          if (firstRoute.route_name !== r.route_name || firstRoute.fare !== r.fare) {
+            const routes = [firstRoute, r];
+            const fares = [firstRoute.fare, r.fare];
+            const dists = [firstRoute.distance_km, r.distance_km];
+            output[existingIdx] = {
+              type: "grouped",
+              from_stop: firstRoute.from_stop,
+              from_stop_bn: firstRoute.from_stop_bn,
+              to_stop: firstRoute.to_stop,
+              to_stop_bn: firstRoute.to_stop_bn,
+              min_fare: Math.min(...fares),
+              max_fare: Math.max(...fares),
+              min_distance_km: Math.round(Math.min(...dists) * 10) / 10,
+              max_distance_km: Math.round(Math.max(...dists) * 10) / 10,
+              routes,
+            } satisfies GroupedDirectResult;
+          }
         }
       } else {
-        busGroupIndices.set(key, output.length);
+        directGroupIndices.set(key, output.length);
+        output.push(r);
+      }
+    } else if (r.type === "transit") {
+      const key = `${r.leg1.from_stop}::${r.transfer_at}::${r.leg2.to_stop}::${r.leg1.mode}::${r.leg2.mode}`;
+      const existingIdx = transitGroupIndices.get(key);
+      if (existingIdx !== undefined) {
+        const item = output[existingIdx];
+        if (item.type === "grouped_transit") {
+          item.min_fare = Math.min(item.min_fare, r.total_fare);
+          item.max_fare = Math.max(item.max_fare, r.total_fare);
+          item.total_fare = item.min_fare;
+          item.min_distance_km = Math.round(Math.min(item.min_distance_km, r.total_distance_km) * 10) / 10;
+          item.max_distance_km = Math.round(Math.max(item.max_distance_km, r.total_distance_km) * 10) / 10;
+          item.total_distance_km = item.min_distance_km;
+
+          if (!item.leg1.routes.some((x) => x.route_name === r.leg1.route_name && x.fare === r.leg1.fare)) {
+            item.leg1.routes.push(r.leg1);
+            item.leg1.min_fare = Math.min(item.leg1.min_fare, r.leg1.fare);
+            item.leg1.max_fare = Math.max(item.leg1.max_fare, r.leg1.fare);
+            item.leg1.min_distance_km = Math.round(Math.min(item.leg1.min_distance_km, r.leg1.distance_km) * 10) / 10;
+            item.leg1.max_distance_km = Math.round(Math.max(item.leg1.max_distance_km, r.leg1.distance_km) * 10) / 10;
+          }
+
+          if (!item.leg2.routes.some((x) => x.route_name === r.leg2.route_name && x.fare === r.leg2.fare)) {
+            item.leg2.routes.push(r.leg2);
+            item.leg2.min_fare = Math.min(item.leg2.min_fare, r.leg2.fare);
+            item.leg2.max_fare = Math.max(item.leg2.max_fare, r.leg2.fare);
+            item.leg2.min_distance_km = Math.round(Math.min(item.leg2.min_distance_km, r.leg2.distance_km) * 10) / 10;
+            item.leg2.max_distance_km = Math.round(Math.max(item.leg2.max_distance_km, r.leg2.distance_km) * 10) / 10;
+          }
+        } else if (item.type === "transit") {
+          const firstTransit = item;
+          const leg1Different = firstTransit.leg1.route_name !== r.leg1.route_name || firstTransit.leg1.fare !== r.leg1.fare;
+          const leg2Different = firstTransit.leg2.route_name !== r.leg2.route_name || firstTransit.leg2.fare !== r.leg2.fare;
+
+          if (leg1Different || leg2Different) {
+            const leg1Routes = [firstTransit.leg1];
+            if (leg1Different) leg1Routes.push(r.leg1);
+
+            const leg2Routes = [firstTransit.leg2];
+            if (leg2Different) leg2Routes.push(r.leg2);
+
+            const minFare = Math.min(firstTransit.total_fare, r.total_fare);
+            const maxFare = Math.max(firstTransit.total_fare, r.total_fare);
+            const minDist = Math.round(Math.min(firstTransit.total_distance_km, r.total_distance_km) * 10) / 10;
+            const maxDist = Math.round(Math.max(firstTransit.total_distance_km, r.total_distance_km) * 10) / 10;
+
+            output[existingIdx] = {
+              type: "grouped_transit",
+              transfer_at: firstTransit.transfer_at,
+              transfer_at_bn: firstTransit.transfer_at_bn,
+              min_fare: minFare,
+              max_fare: maxFare,
+              total_fare: minFare,
+              min_distance_km: minDist,
+              max_distance_km: maxDist,
+              total_distance_km: minDist,
+              leg1: {
+                from_stop: firstTransit.leg1.from_stop,
+                from_stop_bn: firstTransit.leg1.from_stop_bn,
+                to_stop: firstTransit.leg1.to_stop,
+                to_stop_bn: firstTransit.leg1.to_stop_bn,
+                mode: firstTransit.leg1.mode,
+                min_fare: Math.min(firstTransit.leg1.fare, r.leg1.fare),
+                max_fare: Math.max(firstTransit.leg1.fare, r.leg1.fare),
+                min_distance_km: Math.round(Math.min(firstTransit.leg1.distance_km, r.leg1.distance_km) * 10) / 10,
+                max_distance_km: Math.round(Math.max(firstTransit.leg1.distance_km, r.leg1.distance_km) * 10) / 10,
+                duration_mins: firstTransit.leg1.duration_mins,
+                routes: leg1Routes,
+              },
+              leg2: {
+                from_stop: firstTransit.leg2.from_stop,
+                from_stop_bn: firstTransit.leg2.from_stop_bn,
+                to_stop: firstTransit.leg2.to_stop,
+                to_stop_bn: firstTransit.leg2.to_stop_bn,
+                mode: firstTransit.leg2.mode,
+                min_fare: Math.min(firstTransit.leg2.fare, r.leg2.fare),
+                max_fare: Math.max(firstTransit.leg2.fare, r.leg2.fare),
+                min_distance_km: Math.round(Math.min(firstTransit.leg2.distance_km, r.leg2.distance_km) * 10) / 10,
+                max_distance_km: Math.round(Math.max(firstTransit.leg2.distance_km, r.leg2.distance_km) * 10) / 10,
+                duration_mins: firstTransit.leg2.duration_mins,
+                routes: leg2Routes,
+              },
+            } satisfies GroupedTransitResult;
+          }
+        }
+      } else {
+        transitGroupIndices.set(key, output.length);
         output.push(r);
       }
     } else {
@@ -109,6 +215,9 @@ function groupBusResults(results: SearchResult[]): DisplayResult[] {
   for (const item of output) {
     if (item.type === "grouped") {
       item.routes.sort((a, b) => a.fare - b.fare || a.distance_km - b.distance_km);
+    } else if (item.type === "grouped_transit") {
+      item.leg1.routes.sort((a, b) => a.fare - b.fare || a.distance_km - b.distance_km);
+      item.leg2.routes.sort((a, b) => a.fare - b.fare || a.distance_km - b.distance_km);
     }
   }
 
@@ -393,8 +502,8 @@ export default function BusVaraApp() {
         {loading && <SkeletonLoader />}
 
         {!loading && results.length > 0 && (() => {
-          // Group bus results sharing same from/to into consolidated cards
-          const grouped = groupBusResults(results);
+          // Consolidate duplicate direct and transit results into clean grouped cards
+          const grouped = consolidateSearchResults(results);
 
           const metroCount = grouped.filter((r) => getDisplayResultMode(r).hasMetro).length;
           const pureBusCount = grouped.filter((r) => getDisplayResultMode(r).isPureBus).length;
@@ -411,13 +520,13 @@ export default function BusVaraApp() {
 
           const displayedResults = [...filtered].sort((a, b) => {
             if (sortBy === "fare") {
-              const fareA = a.type === "direct" ? a.fare : a.type === "transit" ? a.total_fare : a.type === "grouped" ? a.min_fare : a.route.fare;
-              const fareB = b.type === "direct" ? b.fare : b.type === "transit" ? b.total_fare : b.type === "grouped" ? b.min_fare : b.route.fare;
+              const fareA = a.type === "direct" ? a.fare : a.type === "transit" ? a.total_fare : (a.type === "grouped" || a.type === "grouped_transit") ? a.min_fare : a.route.fare;
+              const fareB = b.type === "direct" ? b.fare : b.type === "transit" ? b.total_fare : (b.type === "grouped" || b.type === "grouped_transit") ? b.min_fare : b.route.fare;
               return fareA - fareB;
             }
             if (sortBy === "distance") {
-              const distA = a.type === "direct" ? a.distance_km : a.type === "transit" ? a.total_distance_km : a.type === "grouped" ? a.min_distance_km : a.route.distance_km;
-              const distB = b.type === "direct" ? b.distance_km : b.type === "transit" ? b.total_distance_km : b.type === "grouped" ? b.min_distance_km : b.route.distance_km;
+              const distA = a.type === "direct" ? a.distance_km : a.type === "transit" ? a.total_distance_km : (a.type === "grouped" || a.type === "grouped_transit") ? a.min_distance_km : a.route.distance_km;
+              const distB = b.type === "direct" ? b.distance_km : b.type === "transit" ? b.total_distance_km : (b.type === "grouped" || b.type === "grouped_transit") ? b.min_distance_km : b.route.distance_km;
               return distA - distB;
             }
             return 0;
@@ -537,6 +646,18 @@ export default function BusVaraApp() {
                     <GroupedRouteCard
                       key={i}
                       group={res}
+                      onOpenStops={openStopsModal}
+                      onShare={handleShare}
+                      animationClass={animationClass}
+                    />
+                  );
+                }
+
+                if (res.type === "grouped_transit") {
+                  return (
+                    <GroupedTransitCard
+                      key={i}
+                      result={res}
                       onOpenStops={openStopsModal}
                       onShare={handleShare}
                       animationClass={animationClass}

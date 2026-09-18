@@ -209,9 +209,7 @@ def calculate_fare_search(c, from_stop: str, to_stop: str):
     c.execute(query_transit)
     transfer_ids = [r[0] for r in c.fetchall() if r[0] not in [from_id, to_id]]
 
-    metro_transits = []
-    bus_transits = []
-    seen_transits = set()
+    best_transits = {}
 
     for tp_id in transfer_ids:
         c.execute(sql_direct_routes, (from_id, tp_id))
@@ -223,11 +221,6 @@ def calculate_fare_search(c, from_stop: str, to_stop: str):
             tp_en, tp_bn = get_stop_names(c, tp_id)
             for l1 in l1_routes:
                 for l2 in l2_routes:
-                    transit_key = (l1['route_id'], l2['route_id'], tp_id)
-                    if transit_key in seen_transits:
-                        continue
-                    seen_transits.add(transit_key)
-
                     d1 = get_distance(c, l1['route_id'], from_id, tp_id)
                     d2 = get_distance(c, l2['route_id'], tp_id, to_id)
                     
@@ -276,20 +269,34 @@ def calculate_fare_search(c, from_stop: str, to_stop: str):
 
                     is_metro_transit = (l1_mode == 'metro' or l2_mode == 'metro')
                     metro_dist = round(d1 if l1_mode == 'metro' else d2, 2) if is_metro_transit else 0
+                    total_dist = round(d1 + d2, 2)
+                    total_fare = f1 + f2
 
                     result_obj = TransitResult(
                         transfer_at=tp_en,
                         transfer_at_bn=tp_bn,
-                        total_distance_km=round(d1 + d2, 2),
-                        total_fare=f1 + f2,
+                        total_distance_km=total_dist,
+                        total_fare=total_fare,
                         leg1=leg1,
                         leg2=leg2
                     )
 
-                    if is_metro_transit:
-                        metro_transits.append((metro_dist, result_obj))
-                    else:
-                        bus_transits.append(result_obj)
+                    pair_key = (l1['route_id'], l2['route_id'])
+                    # Score prioritizing:
+                    # - If metro: max metro distance first, then min total fare, then min total distance
+                    # - If bus: min total fare first, then min total distance
+                    score = (-metro_dist, total_fare, total_dist) if is_metro_transit else (total_fare, total_dist)
+
+                    if pair_key not in best_transits or score < best_transits[pair_key][0]:
+                        best_transits[pair_key] = (score, metro_dist, result_obj, is_metro_transit)
+
+    metro_transits = []
+    bus_transits = []
+    for _, metro_dist, result_obj, is_metro in best_transits.values():
+        if is_metro:
+            metro_transits.append((metro_dist, result_obj))
+        else:
+            bus_transits.append(result_obj)
 
     # Prioritize taking Metro as far as possible, then by total fare
     metro_transits.sort(key=lambda x: (-x[0], x[1].total_fare, x[1].total_distance_km))
