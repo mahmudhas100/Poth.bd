@@ -53,4 +53,19 @@ export interface SuggestionResult {
   route: DirectFareResult;
 }
 
+export interface GroupedDirectResult {
+  type: "grouped";
+  from_stop: string;
+  from_stop_bn: string;
+  to_stop: string;
+  to_stop_bn: string;
+  min_fare: number;
+  max_fare: number;
+  min_distance_km: number;
+  max_distance_km: number;
+  routes: DirectFareResult[];
+}
+
 export type SearchResult = DirectFareResult | TransitResult | SuggestionResult;
+export type DisplayResult = SearchResult | GroupedDirectResult;
+

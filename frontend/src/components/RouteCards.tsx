@@ -1,9 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { SearchIcon, MoveRightIcon } from "@animateicons/react/lucide";
 import { BusIcon, NavigationIcon, RouteDistanceIcon, ShareIcon, MapPinIcon, TrainIcon, ClockIcon } from "@/components/ui/Icons";
-import { DirectFareResult, TransitResult, SuggestionResult } from "@/types/transit";
+import { DirectFareResult, TransitResult, SuggestionResult, GroupedDirectResult } from "@/types/transit";
 import { getGoogleMapsDirectionUrl } from "@/lib/maps";
 import { getMetroLiveStatus } from "@/lib/metro";
 
@@ -370,6 +370,158 @@ export const TransitRouteCard: React.FC<TransitRouteCardProps> = ({
           >
             <ShareIcon size={14} className="group-hover:scale-110 transition-transform" />
             <span className="hidden sm:inline">Share</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface GroupedRouteCardProps {
+  group: GroupedDirectResult;
+  onOpenStops: (stops: string[], title: string) => void;
+  onShare: (fromBn: string, toBn: string, fromEn: string, toEn: string, routeName: string, distance: number, fare: number) => void;
+  animationClass?: string;
+}
+
+export const GroupedRouteCard: React.FC<GroupedRouteCardProps> = ({
+  group,
+  onOpenStops,
+  onShare,
+  animationClass = "",
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const hasFareRange = group.min_fare !== group.max_fare;
+  const hasDistRange = group.min_distance_km !== group.max_distance_km;
+  // Use the shortest-distance route as the representative for stops modal
+  const representative = group.routes.reduce((a, b) => a.distance_km <= b.distance_km ? a : b);
+
+  return (
+    <div className={`transit-card ${animationClass}`}>
+      <div className="space-y-5">
+        <div className="flex flex-row items-center justify-between gap-3 sm:gap-5">
+          <div className="space-y-2 min-w-0 flex-1">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-blue-50 text-accent rounded-md font-bold text-[9px] uppercase tracking-widest font-display">
+              <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+              {group.routes.length} Bus Routes
+            </div>
+            <h3 className="text-xl sm:text-2xl md:text-3xl leading-tight font-bengali font-bold text-slate-900 truncate whitespace-normal">
+              {group.from_stop_bn} ⇄ {group.to_stop_bn}
+            </h3>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
+              <div className="flex items-center gap-1.5">
+                <RouteDistanceIcon size={14} className="text-slate-400 shrink-0" />
+                <p className="text-slate-500 text-xs sm:text-sm font-bengali font-medium">
+                  {hasDistRange ? (
+                    <><span className="font-display font-bold text-slate-700">{group.min_distance_km}–{group.max_distance_km}</span> কি.মি.</>
+                  ) : (
+                    <><span className="font-display font-bold text-slate-700">{group.min_distance_km}</span> কি.মি. দূরত্ব</>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end justify-center shrink-0">
+            <div className="text-4xl sm:text-5xl md:text-6xl whitespace-nowrap fare-number-accent">
+              <span className="text-2xl sm:text-3xl opacity-50 font-bengali font-normal mr-1">৳</span>
+              {hasFareRange ? (
+                <>{group.min_fare}<span className="text-2xl sm:text-3xl opacity-40">–</span>{group.max_fare}</>
+              ) : (
+                group.min_fare
+              )}
+            </div>
+            <p className="text-slate-400 text-[9px] uppercase tracking-[0.2em] font-display font-bold mt-1 whitespace-nowrap">
+              {hasFareRange ? "Fare Range" : "Total Fare"}
+            </p>
+          </div>
+        </div>
+
+        {/* Expandable route list */}
+        <div>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50/80 hover:bg-slate-100/90 border border-slate-200/60 rounded-xl transition-colors group"
+          >
+            <span className="text-xs font-bold text-slate-500 font-display uppercase tracking-wider flex items-center gap-2">
+              <BusIcon size={13} className="text-slate-400" />
+              Available Routes ({group.routes.length})
+            </span>
+            <svg
+              className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2.5}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {expanded && (
+            <div className="mt-2 space-y-1.5 animate-in slide-in-from-top-2 duration-200">
+              {group.routes.map((route, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => onOpenStops(route.stops, route.route_name)}
+                  className="flex items-center justify-between px-3 py-2 bg-white border border-slate-100 rounded-lg hover:border-accent/30 hover:shadow-sm cursor-pointer transition-all group/route"
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className="w-6 h-6 rounded-full bg-blue-50 text-accent text-[10px] font-bold font-display flex items-center justify-center shrink-0 border border-blue-100 group-hover/route:bg-accent group-hover/route:text-white transition-colors">
+                      {idx + 1}
+                    </div>
+                    <p className="text-sm font-bengali font-medium text-slate-700 truncate">
+                      {route.route_name}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs text-slate-400 font-display font-medium">
+                      {route.distance_km} কি.মি.
+                    </span>
+                    <span className="text-sm font-bold text-slate-700 font-display">
+                      ৳{route.fare}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => onOpenStops(representative.stops, representative.route_name)}
+            className="flex-1 py-3.5 bg-slate-50/50 hover:bg-blue-50 border border-slate-200/60 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-accent hover:border-blue-200 transition-all flex items-center justify-center gap-2 group font-display"
+          >
+            <NavigationIcon size={14} className="group-hover:-translate-y-0.5 transition-transform" />
+            View All Stops
+          </button>
+          <a
+            href={getGoogleMapsDirectionUrl(group.from_stop, group.to_stop, false)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3.5 sm:px-4 py-3.5 bg-slate-50/50 hover:bg-emerald-50 border border-slate-200/60 rounded-xl text-slate-500 hover:text-emerald-600 hover:border-emerald-200 transition-all flex items-center justify-center gap-1.5 group font-display"
+            title="গুগল ম্যাপে ডিরেকশন দেখুন (Google Maps)"
+          >
+            <MapPinIcon size={15} className="group-hover:scale-110 text-emerald-600 transition-transform" />
+            <span className="text-xs font-bold uppercase tracking-wider hidden sm:inline text-emerald-700">Maps</span>
+          </a>
+          <button
+            onClick={() =>
+              onShare(
+                group.from_stop_bn,
+                group.to_stop_bn,
+                group.from_stop,
+                group.to_stop,
+                `${group.routes.length} Bus Routes`,
+                representative.distance_km,
+                group.min_fare
+              )
+            }
+            className="px-3.5 sm:px-4 py-3.5 bg-slate-50/50 hover:bg-blue-50 border border-slate-200/60 rounded-xl text-slate-400 hover:text-accent hover:border-blue-200 transition-all flex items-center justify-center"
+            title="Share Fare Details"
+          >
+            <ShareIcon size={16} />
           </button>
         </div>
       </div>

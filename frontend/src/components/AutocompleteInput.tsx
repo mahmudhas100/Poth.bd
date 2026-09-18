@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { XIcon } from "@animateicons/react/lucide";
 import { Stop } from "@/types/transit";
 import { isMetroStation } from "@/lib/metro";
@@ -67,16 +67,13 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
   icon,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [filteredOptions, setFilteredOptions] = useState<ScoredStop[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  const filteredOptions = useMemo(() => {
     const rawQ = value.trim();
     if (!rawQ) {
-      setFilteredOptions([]);
-      setSelectedIndex(-1);
-      return;
+      return [];
     }
 
     const normQ = normalizeText(rawQ);
@@ -121,8 +118,7 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
       return a.stop.name_en.length - b.stop.name_en.length;
     });
 
-    setFilteredOptions(scored.slice(0, 10));
-    setSelectedIndex(-1);
+    return scored.slice(0, 10);
   }, [value, options]);
 
   useEffect(() => {
@@ -207,6 +203,7 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
             type="button"
             onClick={() => {
               onChange("");
+              setSelectedIndex(-1);
               setIsOpen(false);
             }}
             className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full transition-colors"
