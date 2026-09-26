@@ -68,6 +68,51 @@ def init_stop_cache():
                 STOP_CACHE[norm_alias] = sid
                 STOP_NAMES.append(norm_alias)
 
+        # High-frequency colloquial stop synonyms for instant resolution
+        common_synonyms = {
+            "dhakeshwari temple": "dhakeshwari",
+            "dhakeshwari mandir": "dhakeshwari",
+            "dhakeshwari orphanage": "dhakeshwari",
+            "ঢাকেশ্বরী মন্দির": "dhakeshwari",
+            "ঢাকেশ্বরী এতিমখানা": "dhakeshwari",
+            "dhaka university": "dhaka university",
+            "ঢাকা বিশ্ববিদ্যালয়": "dhaka university",
+            "tsc": "dhaka university",
+            "টিএসসি": "dhaka university",
+            "city college": "city college",
+            "ঢাকা সিটি কলেজ": "city college",
+            "dhaka college": "dhaka college",
+            "ঢাকা কলেজ": "dhaka college",
+            "shishu mela": "shishumela",
+            "শিশু মেলা": "shishumela",
+            "mirpur zoo": "zoo",
+            "চিড়িয়াখানা": "zoo",
+            "bahadur shah park": "bahadur shah park",
+            "বাহাদুর শাহ পার্ক": "bahadur shah park",
+            "victoria park": "bahadur shah park",
+            "ভিক্টোরিয়া পার্ক": "bahadur shah park",
+            "darus salam": "darus salam",
+            "দারুস সালাম": "darus salam",
+            "bangla motor": "banglamotor",
+            "বাংলামটর": "banglamotor",
+            "300 feet": "kuril biswa road",
+            "৩০০ ফিট": "kuril biswa road",
+            "notun bazar": "notun bazar",
+            "নতুন বাজার": "notun bazar",
+            "natun bazar": "notun bazar",
+        }
+        for syn, target_key in common_synonyms.items():
+            norm_target = normalize_key(target_key)
+            target_id = STOP_CACHE.get(target_key) or STOP_CACHE.get(norm_target)
+            if target_id:
+                syn_low = syn.lower()
+                STOP_CACHE[syn_low] = target_id
+                STOP_NAMES.append(syn_low)
+                norm_syn = normalize_key(syn_low)
+                if norm_syn and norm_syn not in STOP_CACHE:
+                    STOP_CACHE[norm_syn] = target_id
+                    STOP_NAMES.append(norm_syn)
+
     print(f"Stop Cache initialized. Cached {len(STOP_NAMES)} variations.")
 
 def resolve_stop_fuzzy(query: str):

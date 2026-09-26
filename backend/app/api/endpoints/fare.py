@@ -16,6 +16,7 @@ async def search_fare(
         results, err = calculate_fare_search(c, from_stop, to_stop)
         
         if err:
-            raise HTTPException(status_code=404, detail=err)
+            status_code = 400 if "একই" in err else 404
+            raise HTTPException(status_code=status_code, detail=err)
             
         return results

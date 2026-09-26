@@ -6,6 +6,7 @@ import { BusIcon, NavigationIcon, RouteDistanceIcon, ShareIcon, MapPinIcon, Trai
 import { DirectFareResult, TransitResult, SuggestionResult, GroupedDirectResult, GroupedTransitResult } from "@/types/transit";
 import { getGoogleMapsDirectionUrl } from "@/lib/maps";
 import { getMetroLiveStatus } from "@/lib/metro";
+import { FareInfoBadge } from "@/components/FareInfoBadge";
 
 interface DirectRouteCardProps {
   route: DirectFareResult;
@@ -21,10 +22,17 @@ export const DirectRouteCard: React.FC<DirectRouteCardProps> = ({
   animationClass = "",
 }) => {
   const isMetro = route.mode === "metro";
+  const isExpressway = !isMetro && (route.service_type === "Expressway" || route.route_name.toLowerCase().includes("expressway") || route.route_name.includes("এক্সপ্রেসওয়ে"));
   const metroStatus = isMetro ? getMetroLiveStatus(route.from_stop, route.to_stop) : null;
 
   return (
-    <div className={`transit-card ${isMetro ? "border-emerald-300/80 bg-gradient-to-b from-emerald-50/30 to-white shadow-emerald-500/5 hover:border-emerald-400" : ""} ${animationClass}`}>
+    <div className={`transit-card ${
+      isMetro
+        ? "border-emerald-300/80 bg-gradient-to-b from-emerald-50/30 to-white shadow-emerald-500/5 hover:border-emerald-400"
+        : isExpressway
+        ? "border-indigo-300/80 bg-gradient-to-b from-indigo-50/25 to-white shadow-indigo-500/5 hover:border-indigo-400"
+        : ""
+    } ${animationClass}`}>
       <div className="space-y-5">
         <div className="flex flex-row items-center justify-between gap-3 sm:gap-5">
           <div className="space-y-2 min-w-0 flex-1">
@@ -32,6 +40,11 @@ export const DirectRouteCard: React.FC<DirectRouteCardProps> = ({
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-600 text-white rounded-md font-bold text-[9px] uppercase tracking-widest font-display shadow-sm shadow-emerald-600/20">
                 <TrainIcon size={12} className="text-white" />
                 <span>Dhaka Metro Rail • MRT Line-6</span>
+              </div>
+            ) : isExpressway ? (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-600 text-white rounded-md font-bold text-[9px] uppercase tracking-widest font-display shadow-sm shadow-indigo-600/20">
+                <span className="text-[11px] leading-none">⚡</span>
+                <span>Elevated Expressway • এক্সপ্রেসওয়ে</span>
               </div>
             ) : (
               <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-blue-50 text-accent rounded-md font-bold text-[9px] uppercase tracking-widest font-display">
@@ -46,6 +59,10 @@ export const DirectRouteCard: React.FC<DirectRouteCardProps> = ({
               {isMetro ? (
                 <p className="text-emerald-900 text-sm sm:text-[15px] font-bengali font-bold bg-emerald-50 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg inline-flex w-fit border border-emerald-200/80 items-center">
                   <TrainIcon size={15} className="mr-2 text-emerald-600 shrink-0" /> {route.route_name}
+                </p>
+              ) : isExpressway ? (
+                <p className="text-indigo-950 text-sm sm:text-[15px] font-bengali font-bold bg-indigo-50/80 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg inline-flex w-fit border border-indigo-200/80 items-center">
+                  <BusIcon size={14} className="mr-2 text-indigo-600 shrink-0" /> {route.route_name}
                 </p>
               ) : (
                 <p className="text-slate-600 text-sm sm:text-[15px] font-bengali font-semibold bg-slate-50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg inline-flex w-fit border border-slate-100 items-center">
@@ -103,9 +120,17 @@ export const DirectRouteCard: React.FC<DirectRouteCardProps> = ({
               <span className="text-2xl sm:text-3xl opacity-50 font-bengali font-normal mr-1">৳</span>
               {route.fare}
             </div>
-            <p className="text-slate-400 text-[9px] uppercase tracking-[0.2em] font-display font-bold mt-1 whitespace-nowrap">
-              {isMetro ? "Metro Fare" : "Total Fare"}
-            </p>
+            <div className="flex items-center gap-1 mt-1">
+              <p className="text-slate-400 text-[9px] uppercase tracking-[0.2em] font-display font-bold whitespace-nowrap">
+                {isMetro ? "Metro Fare" : "Total Fare"}
+              </p>
+              <FareInfoBadge
+                mode={isMetro ? "metro" : "bus"}
+                distanceKm={route.distance_km}
+                fare={route.fare}
+                align="right"
+              />
+            </div>
           </div>
         </div>
 
@@ -174,9 +199,12 @@ export const TransitRouteCard: React.FC<TransitRouteCardProps> = ({
   const leg1MetroStatus = result.leg1.mode === "metro" ? getMetroLiveStatus(result.leg1.from_stop, result.leg1.to_stop) : null;
   const leg2MetroStatus = result.leg2.mode === "metro" ? getMetroLiveStatus(result.leg2.from_stop, result.leg2.to_stop) : null;
   const hasMetro = Boolean(leg1MetroStatus || leg2MetroStatus);
+  const leg1Express = result.leg1.mode !== "metro" && (result.leg1.service_type === "Expressway" || result.leg1.route_name.toLowerCase().includes("expressway") || result.leg1.route_name.includes("এক্সপ্রেসওয়ে"));
+  const leg2Express = result.leg2.mode !== "metro" && (result.leg2.service_type === "Expressway" || result.leg2.route_name.toLowerCase().includes("expressway") || result.leg2.route_name.includes("এক্সপ্রেসওয়ে"));
+  const hasExpressway = Boolean(leg1Express || leg2Express);
 
   return (
-    <div className={`transit-card ${animationClass}`}>
+    <div className={`transit-card ${hasExpressway && !hasMetro ? "border-indigo-200/70" : ""} ${animationClass}`}>
       <div className="space-y-6">
         <div className="flex flex-row items-center justify-between gap-3 sm:gap-4 border-b border-slate-100 pb-6">
           <div className="space-y-2 min-w-0 flex-1">
@@ -190,6 +218,11 @@ export const TransitRouteCard: React.FC<TransitRouteCardProps> = ({
                   <BusIcon size={11} /> বাস
                 </span>
                 <span className="text-emerald-800">• Hybrid Transit</span>
+              </div>
+            ) : hasExpressway ? (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200/90 rounded-md font-bold text-[9px] uppercase tracking-widest font-display shadow-2xs">
+                <span className="text-[11px] leading-none">⚡</span>
+                <span>Elevated Expressway Transit • এক্সপ্রেসওয়ে কানেকশন</span>
               </div>
             ) : (
               <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-amber-50 text-amber-600 rounded-md font-bold text-[9px] uppercase tracking-widest font-display">
@@ -221,9 +254,17 @@ export const TransitRouteCard: React.FC<TransitRouteCardProps> = ({
               <span className="text-2xl sm:text-3xl opacity-50 font-bengali font-normal mr-1">৳</span>
               {result.total_fare}
             </div>
-            <p className="text-slate-400 text-[9px] uppercase tracking-[0.2em] font-display font-bold mt-1 whitespace-nowrap">
-              Total Fare
-            </p>
+            <div className="flex items-center gap-1 mt-1">
+              <p className="text-slate-400 text-[9px] uppercase tracking-[0.2em] font-display font-bold whitespace-nowrap">
+                Total Fare
+              </p>
+              <FareInfoBadge
+                mode={hasMetro ? "metro" : "bus"}
+                distanceKm={result.total_distance_km}
+                fare={result.total_fare}
+                align="right"
+              />
+            </div>
           </div>
         </div>
 
@@ -236,6 +277,8 @@ export const TransitRouteCard: React.FC<TransitRouteCardProps> = ({
             className={`bg-white border p-4 rounded-2xl flex justify-between items-center cursor-pointer transition-all group relative z-10 ${
               result.leg1.mode === "metro"
                 ? "border-emerald-200 hover:border-emerald-400 hover:shadow-emerald-500/10 hover:shadow-md"
+                : leg1Express
+                ? "border-indigo-200/90 hover:border-indigo-400 hover:shadow-md"
                 : "border-slate-100 hover:border-accent/30 hover:shadow-md"
             }`}
           >
@@ -243,6 +286,8 @@ export const TransitRouteCard: React.FC<TransitRouteCardProps> = ({
               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border transition-colors ${
                 result.leg1.mode === "metro"
                   ? "bg-emerald-50 text-emerald-700 border-emerald-200 group-hover:bg-emerald-600 group-hover:text-white"
+                  : leg1Express
+                  ? "bg-indigo-50 text-indigo-700 border-indigo-200 group-hover:bg-indigo-600 group-hover:text-white"
                   : "bg-blue-50 text-blue-600 border-blue-100 group-hover:bg-blue-600 group-hover:text-white"
               }`}>
                 {result.leg1.mode === "metro" ? <TrainIcon size={18} /> : "1"}
@@ -251,7 +296,7 @@ export const TransitRouteCard: React.FC<TransitRouteCardProps> = ({
                 <h4 className="font-bold text-lg font-bengali text-slate-800">
                   {result.leg1.from_stop_bn} ⇄ {result.leg1.to_stop_bn}
                 </h4>
-                <p className="text-sm text-slate-500 font-bengali font-medium flex items-center gap-1.5">
+                <p className="text-sm text-slate-500 font-bengali font-medium flex items-center gap-1.5 flex-wrap">
                   {result.leg1.mode === "metro" && leg1MetroStatus ? (
                     <a
                       href="https://dmtcl.gov.bd/pages/static-pages/6922df5f933eb65569e218ed"
@@ -265,6 +310,11 @@ export const TransitRouteCard: React.FC<TransitRouteCardProps> = ({
                       <span>মেট্রোরেল ({leg1MetroStatus.statusText})</span>
                     </a>
                   ) : null}
+                  {leg1Express && (
+                    <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                      <span>⚡ এক্সপ্রেসওয়ে</span>
+                    </span>
+                  )}
                   <span>রুট: {result.leg1.route_name}</span>
                   {result.leg1.duration_mins ? (
                     <span className="text-xs text-slate-400 font-normal">({result.leg1.duration_mins} মি.)</span>
@@ -272,10 +322,18 @@ export const TransitRouteCard: React.FC<TransitRouteCardProps> = ({
                 </p>
               </div>
             </div>
-            <div className={`text-xl sm:text-2xl fare-number whitespace-nowrap shrink-0 ${
-              result.leg1.mode === "metro" ? "text-emerald-700" : "text-slate-600"
-            }`}>
-              ৳{result.leg1.fare}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className={`text-xl sm:text-2xl fare-number whitespace-nowrap ${
+                result.leg1.mode === "metro" ? "text-emerald-700" : "text-slate-600"
+              }`}>
+                ৳{result.leg1.fare}
+              </div>
+              <FareInfoBadge
+                mode={result.leg1.mode}
+                distanceKm={result.leg1.distance_km}
+                fare={result.leg1.fare}
+                align="right"
+              />
             </div>
           </div>
 
@@ -291,6 +349,8 @@ export const TransitRouteCard: React.FC<TransitRouteCardProps> = ({
             className={`bg-white border p-4 rounded-2xl flex justify-between items-center cursor-pointer transition-all group relative z-10 ${
               result.leg2.mode === "metro"
                 ? "border-emerald-200 hover:border-emerald-400 hover:shadow-emerald-500/10 hover:shadow-md"
+                : leg2Express
+                ? "border-indigo-200/90 hover:border-indigo-400 hover:shadow-md"
                 : "border-slate-100 hover:border-emerald-500/30 hover:shadow-md"
             }`}
           >
@@ -298,6 +358,8 @@ export const TransitRouteCard: React.FC<TransitRouteCardProps> = ({
               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border transition-colors ${
                 result.leg2.mode === "metro"
                   ? "bg-emerald-50 text-emerald-700 border-emerald-200 group-hover:bg-emerald-600 group-hover:text-white"
+                  : leg2Express
+                  ? "bg-indigo-50 text-indigo-700 border-indigo-200 group-hover:bg-indigo-600 group-hover:text-white"
                   : "bg-emerald-50 text-emerald-600 border-emerald-100 group-hover:bg-emerald-500 group-hover:text-white"
               }`}>
                 {result.leg2.mode === "metro" ? <TrainIcon size={18} /> : "2"}
@@ -306,7 +368,7 @@ export const TransitRouteCard: React.FC<TransitRouteCardProps> = ({
                 <h4 className="font-bold text-lg font-bengali text-slate-800">
                   {result.leg2.from_stop_bn} ⇄ {result.leg2.to_stop_bn}
                 </h4>
-                <p className="text-sm text-slate-500 font-bengali font-medium flex items-center gap-1.5">
+                <p className="text-sm text-slate-500 font-bengali font-medium flex items-center gap-1.5 flex-wrap">
                   {result.leg2.mode === "metro" && leg2MetroStatus ? (
                     <a
                       href="https://dmtcl.gov.bd/pages/static-pages/6922df5f933eb65569e218ed"
@@ -320,6 +382,11 @@ export const TransitRouteCard: React.FC<TransitRouteCardProps> = ({
                       <span>মেট্রোরেল ({leg2MetroStatus.statusText})</span>
                     </a>
                   ) : null}
+                  {leg2Express && (
+                    <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                      <span>⚡ এক্সপ্রেসওয়ে</span>
+                    </span>
+                  )}
                   <span>রুট: {result.leg2.route_name}</span>
                   {result.leg2.duration_mins ? (
                     <span className="text-xs text-slate-400 font-normal">({result.leg2.duration_mins} মি.)</span>
@@ -327,10 +394,18 @@ export const TransitRouteCard: React.FC<TransitRouteCardProps> = ({
                 </p>
               </div>
             </div>
-            <div className={`text-xl sm:text-2xl fare-number whitespace-nowrap shrink-0 ${
-              result.leg2.mode === "metro" ? "text-emerald-700" : "text-slate-600"
-            }`}>
-              ৳{result.leg2.fare}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className={`text-xl sm:text-2xl fare-number whitespace-nowrap ${
+                result.leg2.mode === "metro" ? "text-emerald-700" : "text-slate-600"
+              }`}>
+                ৳{result.leg2.fare}
+              </div>
+              <FareInfoBadge
+                mode={result.leg2.mode}
+                distanceKm={result.leg2.distance_km}
+                fare={result.leg2.fare}
+                align="right"
+              />
             </div>
           </div>
         </div>
@@ -391,20 +466,28 @@ export const GroupedRouteCard: React.FC<GroupedRouteCardProps> = ({
   animationClass = "",
 }) => {
   const [expanded, setExpanded] = useState(false);
+  const isExpressway = group.service_type === "Expressway" || group.routes.some(r => r.service_type === "Expressway" || r.route_name.toLowerCase().includes("expressway") || r.route_name.includes("এক্সপ্রেসওয়ে"));
   const hasFareRange = group.min_fare !== group.max_fare;
   const hasDistRange = group.min_distance_km !== group.max_distance_km;
   // Use the shortest-distance route as the representative for stops modal
   const representative = group.routes.reduce((a, b) => a.distance_km <= b.distance_km ? a : b);
 
   return (
-    <div className={`transit-card ${animationClass}`}>
+    <div className={`transit-card ${isExpressway ? "border-indigo-300/80 bg-gradient-to-b from-indigo-50/25 to-white shadow-indigo-500/5 hover:border-indigo-400" : ""} ${animationClass}`}>
       <div className="space-y-5">
         <div className="flex flex-row items-center justify-between gap-3 sm:gap-5">
           <div className="space-y-2 min-w-0 flex-1">
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-blue-50 text-accent rounded-md font-bold text-[9px] uppercase tracking-widest font-display">
-              <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-              {group.routes.length} Bus Routes
-            </div>
+            {isExpressway ? (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-600 text-white rounded-md font-bold text-[9px] uppercase tracking-widest font-display shadow-sm shadow-indigo-600/20">
+                <span className="text-[11px] leading-none">⚡</span>
+                <span>Elevated Expressway • {group.routes.length} Routes</span>
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-blue-50 text-accent rounded-md font-bold text-[9px] uppercase tracking-widest font-display">
+                <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+                {group.routes.length} Bus Routes
+              </div>
+            )}
             <h3 className="text-xl sm:text-2xl md:text-3xl leading-tight font-bengali font-bold text-slate-900 truncate whitespace-normal">
               {group.from_stop_bn} ⇄ {group.to_stop_bn}
             </h3>
@@ -431,9 +514,17 @@ export const GroupedRouteCard: React.FC<GroupedRouteCardProps> = ({
                 group.min_fare
               )}
             </div>
-            <p className="text-slate-400 text-[9px] uppercase tracking-[0.2em] font-display font-bold mt-1 whitespace-nowrap">
-              {hasFareRange ? "Fare Range" : "Total Fare"}
-            </p>
+            <div className="flex items-center gap-1 mt-1">
+              <p className="text-slate-400 text-[9px] uppercase tracking-[0.2em] font-display font-bold whitespace-nowrap">
+                {hasFareRange ? "Fare Range" : "Total Fare"}
+              </p>
+              <FareInfoBadge
+                mode="bus"
+                minFare={group.min_fare}
+                maxFare={group.max_fare}
+                align="right"
+              />
+            </div>
           </div>
         </div>
 
@@ -474,13 +565,19 @@ export const GroupedRouteCard: React.FC<GroupedRouteCardProps> = ({
                       {route.route_name}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-2.5 shrink-0">
                     <span className="text-xs text-slate-400 font-display font-medium">
                       {route.distance_km} কি.মি.
                     </span>
                     <span className="text-sm font-bold text-slate-700 font-display">
                       ৳{route.fare}
                     </span>
+                    <FareInfoBadge
+                      mode="bus"
+                      distanceKm={route.distance_km}
+                      fare={route.fare}
+                      align="right"
+                    />
                   </div>
                 </div>
               ))}
@@ -548,13 +645,16 @@ export const GroupedTransitCard: React.FC<GroupedTransitCardProps> = ({
   const leg1MetroStatus = result.leg1.mode === "metro" ? getMetroLiveStatus(result.leg1.from_stop, result.leg1.to_stop) : null;
   const leg2MetroStatus = result.leg2.mode === "metro" ? getMetroLiveStatus(result.leg2.from_stop, result.leg2.to_stop) : null;
   const hasMetro = Boolean(leg1MetroStatus || leg2MetroStatus);
+  const leg1Express = result.leg1.mode !== "metro" && (result.leg1.service_type === "Expressway" || result.leg1.routes.some(r => r.service_type === "Expressway" || r.route_name.toLowerCase().includes("expressway") || r.route_name.includes("এক্সপ্রেসওয়ে")));
+  const leg2Express = result.leg2.mode !== "metro" && (result.leg2.service_type === "Expressway" || result.leg2.routes.some(r => r.service_type === "Expressway" || r.route_name.toLowerCase().includes("expressway") || r.route_name.includes("এক্সপ্রেসওয়ে")));
+  const hasExpressway = Boolean(leg1Express || leg2Express);
 
   const hasFareRange = result.min_fare !== result.max_fare;
   const hasDistRange = result.min_distance_km !== result.max_distance_km;
   const totalBusOptions = result.leg1.routes.length + result.leg2.routes.length;
 
   return (
-    <div className={`transit-card ${animationClass}`}>
+    <div className={`transit-card ${hasExpressway && !hasMetro ? "border-indigo-200/70" : ""} ${animationClass}`}>
       <div className="space-y-6">
         <div className="flex flex-row items-center justify-between gap-3 sm:gap-4 border-b border-slate-100 pb-6">
           <div className="space-y-2 min-w-0 flex-1">
@@ -568,6 +668,11 @@ export const GroupedTransitCard: React.FC<GroupedTransitCardProps> = ({
                   <BusIcon size={11} /> বাস
                 </span>
                 <span className="text-emerald-800">• Hybrid Transit</span>
+              </div>
+            ) : hasExpressway ? (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200/90 rounded-md font-bold text-[9px] uppercase tracking-widest font-display shadow-2xs">
+                <span className="text-[11px] leading-none">⚡</span>
+                <span>Elevated Expressway Transit • এক্সপ্রেসওয়ে কানেকশন ({totalBusOptions} বিকল্প)</span>
               </div>
             ) : (
               <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-amber-50 text-amber-600 rounded-md font-bold text-[9px] uppercase tracking-widest font-display">
@@ -599,9 +704,17 @@ export const GroupedTransitCard: React.FC<GroupedTransitCardProps> = ({
               <span className="text-2xl sm:text-3xl opacity-50 font-bengali font-normal mr-1">৳</span>
               {hasFareRange ? `${result.min_fare}–${result.max_fare}` : result.min_fare}
             </div>
-            <p className="text-slate-400 text-[9px] uppercase tracking-[0.2em] font-display font-bold mt-1 whitespace-nowrap">
-              {hasFareRange ? "Fare Range" : "Total Fare"}
-            </p>
+            <div className="flex items-center gap-1 mt-1">
+              <p className="text-slate-400 text-[9px] uppercase tracking-[0.2em] font-display font-bold whitespace-nowrap">
+                {hasFareRange ? "Fare Range" : "Total Fare"}
+              </p>
+              <FareInfoBadge
+                mode={result.leg1.mode === "metro" || result.leg2.mode === "metro" ? "metro" : "bus"}
+                minFare={result.min_fare}
+                maxFare={result.max_fare}
+                align="right"
+              />
+            </div>
           </div>
         </div>
 
@@ -648,12 +761,18 @@ export const GroupedTransitCard: React.FC<GroupedTransitCardProps> = ({
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3 shrink-0 ml-2">
+              <div className="flex items-center gap-2 shrink-0 ml-2">
                 <div className={`text-xl sm:text-2xl fare-number whitespace-nowrap ${
                   result.leg1.mode === "metro" ? "text-emerald-700" : "text-slate-600"
                 }`}>
                   ৳{result.leg1.min_fare === result.leg1.max_fare ? result.leg1.min_fare : `${result.leg1.min_fare}–${result.leg1.max_fare}`}
                 </div>
+                <FareInfoBadge
+                  mode={result.leg1.mode}
+                  minFare={result.leg1.min_fare}
+                  maxFare={result.leg1.max_fare}
+                  align="right"
+                />
                 {result.leg1.routes.length > 1 && (
                   <svg
                     className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedLeg1 ? "rotate-180" : ""}`}
@@ -685,13 +804,19 @@ export const GroupedTransitCard: React.FC<GroupedTransitCardProps> = ({
                         {rt.route_name}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2.5 shrink-0 ml-2">
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
                       <span className="text-[11px] text-slate-400 font-display font-medium">
                         {rt.distance_km} কি.মি.
                       </span>
                       <span className="text-xs sm:text-sm font-bold text-slate-700 font-display">
                         ৳{rt.fare}
                       </span>
+                      <FareInfoBadge
+                        mode={result.leg1.mode}
+                        distanceKm={rt.distance_km}
+                        fare={rt.fare}
+                        align="right"
+                      />
                     </div>
                   </div>
                 ))}
@@ -745,12 +870,18 @@ export const GroupedTransitCard: React.FC<GroupedTransitCardProps> = ({
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3 shrink-0 ml-2">
+              <div className="flex items-center gap-2 shrink-0 ml-2">
                 <div className={`text-xl sm:text-2xl fare-number whitespace-nowrap ${
                   result.leg2.mode === "metro" ? "text-emerald-700" : "text-slate-600"
                 }`}>
                   ৳{result.leg2.min_fare === result.leg2.max_fare ? result.leg2.min_fare : `${result.leg2.min_fare}–${result.leg2.max_fare}`}
                 </div>
+                <FareInfoBadge
+                  mode={result.leg2.mode}
+                  minFare={result.leg2.min_fare}
+                  maxFare={result.leg2.max_fare}
+                  align="right"
+                />
                 {result.leg2.routes.length > 1 && (
                   <svg
                     className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedLeg2 ? "rotate-180" : ""}`}
@@ -782,13 +913,19 @@ export const GroupedTransitCard: React.FC<GroupedTransitCardProps> = ({
                         {rt.route_name}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2.5 shrink-0 ml-2">
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
                       <span className="text-[11px] text-slate-400 font-display font-medium">
                         {rt.distance_km} কি.মি.
                       </span>
                       <span className="text-xs sm:text-sm font-bold text-slate-700 font-display">
                         ৳{rt.fare}
                       </span>
+                      <FareInfoBadge
+                        mode={result.leg2.mode}
+                        distanceKm={rt.distance_km}
+                        fare={rt.fare}
+                        align="right"
+                      />
                     </div>
                   </div>
                 ))}

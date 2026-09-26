@@ -1,4 +1,4 @@
-const CACHE_NAME = 'poth-pwa-v3';
+const CACHE_NAME = 'poth-pwa-v4';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.webmanifest',
@@ -48,6 +48,9 @@ self.addEventListener('fetch', (event) => {
 
   // Ignore non-GET requests
   if (event.request.method !== 'GET') return;
+
+  // Ignore Next.js internal / HMR / dev requests
+  if (url.pathname.startsWith('/_next/')) return;
 
   // 1. API Requests (/stops, /search): Stale-While-Revalidate
   if (url.pathname.startsWith('/stops') || url.pathname.startsWith('/search') || url.port === '8000') {

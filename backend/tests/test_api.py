@@ -203,6 +203,74 @@ def test_hybrid_metro_transit():
     # Should transfer at Motijheel or Secretariat (Paltan) to maximize metro travel distance
     assert metro_transits[0]["transfer_at"] in ["Motijheel", "Secretariat (Paltan)"]
 
+def test_stop_coordinates():
+    response = client.get("/stops")
+    assert response.status_code == 200
+    stops = response.json()
+    assert len(stops) >= 300
+    azimpur = next((s for s in stops if s["name_en"] == "Azimpur"), None)
+    assert azimpur is not None
+    assert azimpur["lat"] is not None and azimpur["lng"] is not None
+    assert 23.0 < azimpur["lat"] < 24.5
+    assert 90.0 < azimpur["lng"] < 91.0
+
+def test_azimpur_to_dhakeshwari_direct():
+    response = client.get("/search?from_stop=Azimpur&to_stop=Dhakeshwari Temple")
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) > 0
+    directs = [r for r in results if r["type"] == "direct"]
+    assert len(directs) > 0
+    first = directs[0]
+    assert first["fare"] == 10
+    assert first["distance_km"] < 1.5
+
+def test_commercial_operator_names():
+    response = client.get("/search?from_stop=Mirpur 10&to_stop=Farmgate")
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) > 0
+    # Confirm operator name or formatted route is present
+    assert any("বিকল্প" in r["route_name"] or "শিখর" in r["route_name"] or "MRT" in r["route_name"] for r in results)
+
+def test_identical_origin_destination_rejected():
+    response = client.get("/search?from_stop=Azimpur&to_stop=Azimpur")
+    assert response.status_code == 400
+    assert "একই" in response.json()["detail"]
+
+def test_short_distance_no_circuity_detour():
+    response = client.get("/search?from_stop=Azimpur&to_stop=Dhakeshwari Temple")
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) > 0
+    # No result should have an absurd detour (> 5.0 km) for an 800m trip
+    for r in results:
+        dist = r.get("distance_km") or r.get("total_distance_km", 0)
+        assert dist <= 5.0, f"Result distance {dist} km exceeds maximum circuity threshold for short trip"
+
+def test_expressway_routes_prioritized():
+    # Direct search from Airport to Farmgate should return Expressway routes first
+    response = client.get("/search?from_stop=Airport&to_stop=Farmgate")
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) > 0
+    # First bus route should be Elevated Expressway
+    bus_results = [r for r in results if r.get("mode") == "bus"]
+    assert len(bus_results) > 0
+    assert bus_results[0]["service_type"] == "Expressway"
+    assert any("Expressway" in r["route_name"] or "এক্সপ্রেসওয়ে" in r["route_name"] for r in bus_results[:2])
+
+def test_lalmatia_and_bikash_expressway():
+    # Search from Abdullahpur to Lalmatia
+    response = client.get("/search?from_stop=Abdullahpur&to_stop=Lalmatia")
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) > 0
+    # First option should be Bikash Expressway
+    top = results[0]
+    assert top["service_type"] == "Expressway"
+    assert top["route_id"] == 855 or "Bikash" in top["route_name"]
+
 if __name__ == "__main__":
     tests = [
         test_health,
@@ -223,6 +291,13 @@ if __name__ == "__main__":
         test_mrt_short_hop,
         test_mrt_station_aliases,
         test_hybrid_metro_transit,
+        test_stop_coordinates,
+        test_azimpur_to_dhakeshwari_direct,
+        test_commercial_operator_names,
+        test_identical_origin_destination_rejected,
+        test_short_distance_no_circuity_detour,
+        test_expressway_routes_prioritized,
+        test_lalmatia_and_bikash_expressway,
         test_security_headers,
         test_query_length_validation,
         test_rate_limiting,

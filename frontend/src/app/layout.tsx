@@ -4,13 +4,17 @@ import "./globals.css";
 
 const hindSiliguri = Hind_Siliguri({
   subsets: ["bengali"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["400", "600", "700"],
+  display: "swap",
   variable: "--font-bengali",
+  preload: true,
 });
 
 const outfit = Outfit({
   subsets: ["latin"],
+  display: "swap",
   variable: "--font-display",
+  preload: true,
 });
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://poth.bd";
@@ -70,13 +74,12 @@ export const metadata: Metadata = {
 
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 export const viewport: Viewport = {
   themeColor: "#2563eb",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 };
 
 export default function RootLayout({
@@ -86,38 +89,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="bn" className={`${hindSiliguri.variable} ${outfit.variable}`}>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-                  navigator.serviceWorker.getRegistrations().then(function(regs) {
-                    for (var r of regs) r.unregister();
-                  });
-                } else {
-                  function registerSW() {
-                    navigator.serviceWorker.register('/sw.js', { scope: '/' })
-                      .then(function(reg) {
-                        console.log('Poth SW active: ', reg.scope);
-                      })
-                      .catch(function(err) {
-                        console.error('Poth SW registration error: ', err);
-                      });
-                  }
-                  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-                    registerSW();
-                  } else {
-                    window.addEventListener('DOMContentLoaded', registerSW);
-                    window.addEventListener('load', registerSW);
-                  }
-                }
-              }
-            `,
-          }}
-        />
-      </head>
       <body className="antialiased">
+        <ServiceWorkerRegister />
         {children}
         <Analytics />
         <SpeedInsights />

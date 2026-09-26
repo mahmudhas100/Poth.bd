@@ -17,7 +17,7 @@ export const SearchHeader: React.FC<SearchHeaderProps> = ({
         isSearchExpanded ? "max-h-[500px] opacity-100 shrink-0" : "max-h-0 opacity-0 shrink-0 m-0"
       }`}
     >
-      <header className="mb-6 md:mb-10 flex flex-col items-center md:items-start text-center md:text-left animate-in slide-in-from-bottom-8 duration-700 fade-in">
+      <header className="mb-6 md:mb-10 flex flex-col items-center md:items-start text-center md:text-left">
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <div className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 border border-accent/20 text-accent font-display font-bold text-[10px] uppercase tracking-widest">
             <span className="relative flex h-2 w-2">

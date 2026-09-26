@@ -16,6 +16,11 @@ build/
 # Service Worker & PWA Caches
 frontend/public/workbox-*.js
 
+# Database backups
+backend/data/*backup*
+backend/data/*.bak*
+scratch/
+
 
 # IDE & Editor files
 .vscode/

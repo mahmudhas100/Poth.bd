@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  compress: true,
+  poweredByHeader: false,
+  experimental: {
+    optimizePackageImports: ["@animateicons/react"],
+  },
   async rewrites() {
     return [
       {

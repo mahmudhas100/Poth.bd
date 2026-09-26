@@ -4,7 +4,7 @@ import React from "react";
 import { SearchIcon, MapPinIcon } from "@animateicons/react/lucide";
 import { NavigationIcon, ChevronDownIcon, ChevronUpIcon, SwapIcon } from "@/components/ui/Icons";
 import { AutocompleteInput } from "@/components/AutocompleteInput";
-import { RecentSearches } from "@/components/RecentSearches";
+import { RecentSearches, RoutePillItem } from "@/components/RecentSearches";
 import { Stop } from "@/types/transit";
 
 interface RouteSearchFormProps {
@@ -17,9 +17,13 @@ interface RouteSearchFormProps {
   isSearchExpanded: boolean;
   setIsSearchExpanded: (val: boolean) => void;
   hasSearched: boolean;
-  recentSearches: { from: string; to: string }[];
+  recentSearches: RoutePillItem[];
   onSearch: (e: React.FormEvent) => void;
   onSwap: () => void;
+  onSelectPill: (from: string, to: string) => void;
+  onResetPills: () => void;
+  onToggleHidePills: () => void;
+  isPillsHidden: boolean;
 }
 
 export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
@@ -35,10 +39,14 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
   recentSearches,
   onSearch,
   onSwap,
+  onSelectPill,
+  onResetPills,
+  onToggleHidePills,
+  isPillsHidden,
 }) => {
   return (
     <section
-      className={`shrink-0 animate-in slide-in-from-bottom-10 duration-700 delay-150 fade-in fill-mode-both relative z-20 transition-all duration-500 ${
+      className={`shrink-0 relative z-20 transition-all duration-300 ${
         isSearchExpanded ? "mb-6 md:mb-10" : "mb-3"
       }`}
     >
@@ -131,10 +139,10 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
           >
             <RecentSearches
               searches={recentSearches}
-              onSelect={(from, to) => {
-                setFromStop(from);
-                setToStop(to);
-              }}
+              onSelect={onSelectPill}
+              onReset={onResetPills}
+              onToggleHide={onToggleHidePills}
+              isHidden={isPillsHidden}
             />
 
             <button

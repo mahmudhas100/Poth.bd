@@ -17,9 +17,9 @@ async def get_stops(q: Optional[str] = Query(None, max_length=60)):
             alias_map.setdefault(row['stop_id'], []).append(row['alias_name'])
 
         if q:
-            c.execute("SELECT id, name_en, name_bn FROM stops WHERE name_en LIKE ? OR name_bn LIKE ?", (f'%{q}%', f'%{q}%'))
+            c.execute("SELECT id, name_en, name_bn, lat, lng FROM stops WHERE name_en LIKE ? OR name_bn LIKE ?", (f'%{q}%', f'%{q}%'))
         else:
-            c.execute("SELECT id, name_en, name_bn FROM stops ORDER BY name_en")
+            c.execute("SELECT id, name_en, name_bn, lat, lng FROM stops ORDER BY name_en")
         
         stops_list = []
         for r in c.fetchall():

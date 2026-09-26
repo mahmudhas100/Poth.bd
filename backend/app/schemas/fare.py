@@ -5,11 +5,14 @@ class Stop(BaseModel):
     id: int
     name_bn: str
     name_en: str
+    lat: Optional[float] = None
+    lng: Optional[float] = None
     aliases: List[str] = []
 
 class FareResult(BaseModel):
     type: str = "direct"
     mode: str = "bus"
+    service_type: Optional[str] = "Regular"
     duration_mins: Optional[int] = None
     route_id: int
     route_name: str
@@ -33,6 +36,7 @@ class TransitLeg(BaseModel):
     route_id: int
     route_name: str
     mode: str = "bus"
+    service_type: Optional[str] = "Regular"
     duration_mins: Optional[int] = None
     from_stop: str
     from_stop_bn: str

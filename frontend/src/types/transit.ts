@@ -3,12 +3,15 @@ export interface Stop {
   name_bn: string;
   name_en: string;
   aliases?: string[];
+  lat?: number;
+  lng?: number;
 }
 
 export interface TransitLeg {
   route_id: number;
   route_name: string;
   mode?: "bus" | "metro";
+  service_type?: string;
   duration_mins?: number;
   from_stop: string;
   from_stop_bn: string;
@@ -24,6 +27,7 @@ export interface DirectFareResult {
   route_id: number;
   route_name: string;
   mode?: "bus" | "metro";
+  service_type?: string;
   duration_mins?: number;
   from_stop: string;
   from_stop_bn: string;
@@ -59,6 +63,7 @@ export interface GroupedDirectResult {
   from_stop_bn: string;
   to_stop: string;
   to_stop_bn: string;
+  service_type?: string;
   min_fare: number;
   max_fare: number;
   min_distance_km: number;
@@ -72,6 +77,7 @@ export interface GroupedTransitLeg {
   to_stop: string;
   to_stop_bn: string;
   mode?: "bus" | "metro";
+  service_type?: string;
   min_fare: number;
   max_fare: number;
   min_distance_km: number;

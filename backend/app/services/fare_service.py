@@ -1,5 +1,5 @@
 import re
-from typing import List
+from typing import List, Optional
 from app.schemas.fare import FareResult, SuggestionResult, TransitLeg, TransitResult
 from app.services.stop_service import resolve_stop_fuzzy, get_stop_names
 
@@ -49,9 +49,26 @@ def get_metro_duration(c, route_id: int, stop1_id: int, stop2_id: int) -> int:
         return max(2, round(hops * 2.1))
     return 5
 
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    import math
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2 +
+         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
 def format_route_name(c, route_name_raw: str, route_id: int, mode: str = "bus") -> str:
     if mode == "metro" or "MRT" in route_name_raw:
         return "MRT Line-6 (মেট্রোরেল)"
+
+    c.execute("SELECT operator_name, operator_name_bn FROM routes WHERE id = ?", (route_id,))
+    op_row = c.fetchone()
+    if op_row and op_row['operator_name_bn']:
+        op_bn = op_row['operator_name_bn']
+        op_en = op_row['operator_name']
+        return f"{op_bn} ({op_en})"
 
     c.execute("""
         SELECT s.name_en 
@@ -81,19 +98,38 @@ def format_route_name(c, route_name_raw: str, route_id: int, mode: str = "bus") 
     
     return route_name_raw
 
-def get_fare_amount(c, route_id: int, from_id: int, to_id: int, distance: float) -> int:
+def get_fare_amount(c, route_id: int, from_id: int, to_id: int, distance: float, service_type: str = "Regular") -> int:
     c.execute("""
         SELECT fare_tk FROM fares 
         WHERE route_id = ? AND ((from_stop_id = ? AND to_stop_id = ?) OR (from_stop_id = ? AND to_stop_id = ?))
     """, (route_id, from_id, to_id, to_id, from_id))
     res = c.fetchone()
     if res:
-        return res['fare_tk']
+        return max(10, res['fare_tk'])
     
     if distance <= 0:
-        return 0
-    calculated = round(distance * 2.53)
-    return max(10, calculated)
+        return 10
+
+    # Elevated Expressway toll rule: Airport/Kawla <-> Farmgate charges 40 Tk (toll included), rest follows standard fare
+    if service_type and service_type.strip().lower() == "expressway":
+        EXPRESSWAY_NORTH = {764, 765, 836, 766, 835, 1211, 1001, 767, 1349, 1545, 922, 930, 1220, 898}
+        EXPRESSWAY_SOUTH = {743, 1016, 1798, 1183, 799, 819, 800, 822, 824, 823, 1756, 1755, 1006}
+        if (from_id in EXPRESSWAY_NORTH and to_id in EXPRESSWAY_SOUTH) or (from_id in EXPRESSWAY_SOUTH and to_id in EXPRESSWAY_NORTH):
+            surface_dist = max(0.0, distance - 11.5)
+            return 40 + round(surface_dist * 2.70)
+
+    # BRTA official gazette rate (September 2026): 2.70 Tk/km (minimum 10 Tk)
+    calculated = max(10, int(distance * 2.70 + 0.5))
+    return calculated
+
+def is_expressway(service_type: Optional[str], route_name: Optional[str]) -> bool:
+    if service_type and service_type.strip().lower() == "expressway":
+        return True
+    if route_name:
+        rn_lower = route_name.lower()
+        if "expressway" in rn_lower or "এক্সপ্রেসওয়ে" in rn_lower:
+            return True
+    return False
 
 def calculate_fare_search(c, from_stop: str, to_stop: str):
     from_id = resolve_stop_fuzzy(from_stop)
@@ -102,11 +138,24 @@ def calculate_fare_search(c, from_stop: str, to_stop: str):
     if not from_id or not to_id:
         return None, "Stop not recognized. Please check spelling."
 
+    if from_id == to_id:
+        return None, "প্রস্থান ও গন্তব্য স্থান একই হতে পারে না। ভিন্ন স্থান নির্বাচন করুন।"
+
     from_en, from_bn = get_stop_names(c, from_id)
     to_en, to_bn = get_stop_names(c, to_id)
 
+    c.execute("SELECT lat, lng FROM stops WHERE id = ?", (from_id,))
+    r_from = c.fetchone()
+    c.execute("SELECT lat, lng FROM stops WHERE id = ?", (to_id,))
+    r_to = c.fetchone()
+    straight_km = None
+    if r_from and r_to and r_from['lat'] is not None and r_to['lat'] is not None:
+        straight_km = haversine_km(r_from['lat'], r_from['lng'], r_to['lat'], r_to['lng'])
+
     sql_direct_routes = """
-        SELECT rs1.route_id, r.route_name, COALESCE(r.mode, 'bus') as mode
+        SELECT rs1.route_id, r.route_name, COALESCE(r.mode, 'bus') as mode,
+               COALESCE(r.service_type, 'Regular') as service_type,
+               abs(rs2.distance_km - rs1.distance_km) as distance_km
         FROM route_stops rs1
         JOIN route_stops rs2 ON rs1.route_id = rs2.route_id
         JOIN routes r ON rs1.route_id = r.id
@@ -119,9 +168,14 @@ def calculate_fare_search(c, from_stop: str, to_stop: str):
     direct_results = []
     for r in rows:
         r_mode = r['mode'] if 'mode' in r.keys() else 'bus'
-        dist = get_distance(c, r['route_id'], from_id, to_id)
-        fare = get_fare_amount(c, r['route_id'], from_id, to_id, dist)
+        r_service = r['service_type'] if 'service_type' in r.keys() else 'Regular'
         clean_name = format_route_name(c, r['route_name'], r['route_id'], r_mode)
+        if is_expressway(r_service, clean_name) or is_expressway(r_service, r['route_name']):
+            r_service = "Expressway"
+        dist = r['distance_km'] if ('distance_km' in r.keys() and r['distance_km'] and r['distance_km'] > 0) else get_distance(c, r['route_id'], from_id, to_id)
+        if dist <= 0.05 and straight_km:
+            dist = max(0.5, round(straight_km * 1.3, 2))
+        fare = get_fare_amount(c, r['route_id'], from_id, to_id, dist, r_service)
         route_stops = get_intermediate_stops(c, r['route_id'], from_id, to_id)
         duration = get_metro_duration(c, r['route_id'], from_id, to_id) if r_mode == 'metro' else None
         
@@ -129,6 +183,7 @@ def calculate_fare_search(c, from_stop: str, to_stop: str):
             route_id=r['route_id'],
             route_name=clean_name,
             mode=r_mode,
+            service_type=r_service,
             duration_mins=duration,
             from_stop=from_en,
             from_stop_bn=from_bn,
@@ -139,8 +194,19 @@ def calculate_fare_search(c, from_stop: str, to_stop: str):
             stops=route_stops
         ))
 
-    # Pin Metro Rail at top, then sort by fare and distance
-    direct_results.sort(key=lambda x: (0 if x.mode == 'metro' else 1, x.fare, x.distance_km))
+    # Prioritize:
+    # 0: Metro Rail (mode == 'metro')
+    # 1: Elevated Expressway (service_type == 'Expressway')
+    # 2: Regular buses
+    # Within each priority tier, sort by fare, then distance
+    def direct_priority(res: FareResult) -> int:
+        if res.mode == "metro":
+            return 0
+        if is_expressway(res.service_type, res.route_name):
+            return 1
+        return 2
+
+    direct_results.sort(key=lambda x: (direct_priority(x), x.fare, x.distance_km))
 
     has_direct_metro = any(x.mode == 'metro' for x in direct_results)
     if has_direct_metro:
@@ -161,9 +227,12 @@ def calculate_fare_search(c, from_stop: str, to_stop: str):
             if sim_rows:
                 r = sim_rows[0]
                 r_mode = r['mode'] if 'mode' in r.keys() else 'bus'
-                dist = get_distance(c, r['route_id'], from_id, sim_id)
-                fare = get_fare_amount(c, r['route_id'], from_id, sim_id, dist)
+                r_service = r['service_type'] if 'service_type' in r.keys() else 'Regular'
                 clean_name = format_route_name(c, r['route_name'], r['route_id'], r_mode)
+                if is_expressway(r_service, clean_name) or is_expressway(r_service, r['route_name']):
+                    r_service = "Expressway"
+                dist = get_distance(c, r['route_id'], from_id, sim_id)
+                fare = get_fare_amount(c, r['route_id'], from_id, sim_id, dist, r_service)
                 route_stops = get_intermediate_stops(c, r['route_id'], from_id, sim_id)
                 duration = get_metro_duration(c, r['route_id'], from_id, sim_id) if r_mode == 'metro' else None
                 
@@ -176,6 +245,7 @@ def calculate_fare_search(c, from_stop: str, to_stop: str):
                         route_id=r['route_id'],
                         route_name=clean_name,
                         mode=r_mode,
+                        service_type=r_service,
                         duration_mins=duration,
                         from_stop=from_en,
                         from_stop_bn=from_bn,
@@ -209,92 +279,127 @@ def calculate_fare_search(c, from_stop: str, to_stop: str):
     c.execute(query_transit)
     transfer_ids = [r[0] for r in c.fetchall() if r[0] not in [from_id, to_id]]
 
+    has_plenty_direct = len(direct_results) >= 5
     best_transits = {}
 
     for tp_id in transfer_ids:
         c.execute(sql_direct_routes, (from_id, tp_id))
         l1_routes = c.fetchall()
+        if not l1_routes:
+            continue
         c.execute(sql_direct_routes, (tp_id, to_id))
         l2_routes = c.fetchall()
+        if not l2_routes:
+            continue
         
-        if l1_routes and l2_routes:
-            tp_en, tp_bn = get_stop_names(c, tp_id)
-            for l1 in l1_routes:
-                for l2 in l2_routes:
-                    d1 = get_distance(c, l1['route_id'], from_id, tp_id)
-                    d2 = get_distance(c, l2['route_id'], tp_id, to_id)
-                    
-                    f1 = get_fare_amount(c, l1['route_id'], from_id, tp_id, d1)
-                    f2 = get_fare_amount(c, l2['route_id'], tp_id, to_id, d2)
-                    
-                    l1_mode = l1['mode'] if 'mode' in l1.keys() else 'bus'
-                    l2_mode = l2['mode'] if 'mode' in l2.keys() else 'bus'
+        for l1 in l1_routes:
+            l1_mode = l1['mode'] if 'mode' in l1.keys() else 'bus'
+            l1_service = l1['service_type'] if 'service_type' in l1.keys() else 'Regular'
+            if is_expressway(l1_service, l1['route_name']):
+                l1_service = "Expressway"
 
-                    name1 = format_route_name(c, l1['route_name'], l1['route_id'], l1_mode)
-                    name2 = format_route_name(c, l2['route_name'], l2['route_id'], l2_mode)
-                    
-                    stops1 = get_intermediate_stops(c, l1['route_id'], from_id, tp_id)
-                    stops2 = get_intermediate_stops(c, l2['route_id'], tp_id, to_id)
+            for l2 in l2_routes:
+                if l1['route_id'] == l2['route_id']:
+                    continue
+                l2_mode = l2['mode'] if 'mode' in l2.keys() else 'bus'
+                l2_service = l2['service_type'] if 'service_type' in l2.keys() else 'Regular'
+                if is_expressway(l2_service, l2['route_name']):
+                    l2_service = "Expressway"
 
-                    dur1 = get_metro_duration(c, l1['route_id'], from_id, tp_id) if l1_mode == 'metro' else None
-                    dur2 = get_metro_duration(c, l2['route_id'], tp_id, to_id) if l2_mode == 'metro' else None
-                    
-                    leg1 = TransitLeg(
-                        route_id=l1['route_id'],
-                        route_name=name1,
-                        mode=l1_mode,
-                        duration_mins=dur1,
-                        from_stop=from_en,
-                        from_stop_bn=from_bn,
-                        to_stop=tp_en,
-                        to_stop_bn=tp_bn,
-                        distance_km=round(d1, 2),
-                        fare=f1,
-                        stops=stops1
-                    )
+                is_metro_transit = (l1_mode == 'metro' or l2_mode == 'metro')
+                is_expressway_transit = (l1_service == "Expressway" or l2_service == "Expressway")
 
-                    leg2 = TransitLeg(
-                        route_id=l2['route_id'],
-                        route_name=name2,
-                        mode=l2_mode,
-                        duration_mins=dur2,
-                        from_stop=tp_en,
-                        from_stop_bn=tp_bn,
-                        to_stop=to_en,
-                        to_stop_bn=to_bn,
-                        distance_km=round(d2, 2),
-                        fare=f2,
-                        stops=stops2
-                    )
+                # If direct bus options are already plentiful, only consider hybrid metro or expressway transit
+                if has_plenty_direct and not is_metro_transit and not is_expressway_transit:
+                    continue
 
-                    is_metro_transit = (l1_mode == 'metro' or l2_mode == 'metro')
-                    metro_dist = round(d1 if l1_mode == 'metro' else d2, 2) if is_metro_transit else 0
-                    total_dist = round(d1 + d2, 2)
-                    total_fare = f1 + f2
+                d1 = l1['distance_km'] if ('distance_km' in l1.keys() and l1['distance_km'] and l1['distance_km'] > 0) else get_distance(c, l1['route_id'], from_id, tp_id)
+                d2 = l2['distance_km'] if ('distance_km' in l2.keys() and l2['distance_km'] and l2['distance_km'] > 0) else get_distance(c, l2['route_id'], tp_id, to_id)
+                total_dist = round(d1 + d2, 2)
 
-                    result_obj = TransitResult(
-                        transfer_at=tp_en,
-                        transfer_at_bn=tp_bn,
-                        total_distance_km=total_dist,
-                        total_fare=total_fare,
-                        leg1=leg1,
-                        leg2=leg2
-                    )
+                # Early circuity prune BEFORE calling get_intermediate_stops, format_route_name, or get_fare_amount
+                if straight_km is not None:
+                    if is_metro_transit:
+                        max_allowed_dist = max(5.0, straight_km * 2.0) if straight_km < 3.5 else max(8.0, straight_km * 2.8)
+                    elif is_expressway_transit:
+                        max_allowed_dist = max(5.0, straight_km * 2.6)
+                    else:
+                        max_allowed_dist = max(5.0, straight_km * 2.5)
+                    if total_dist > max_allowed_dist:
+                        continue
+                else:
+                    if d1 > 25.0 or d2 > 25.0 or total_dist > 35.0:
+                        continue
 
-                    pair_key = (l1['route_id'], l2['route_id'])
-                    # Score prioritizing:
-                    # - If metro: max metro distance first, then min total fare, then min total distance
-                    # - If bus: min total fare first, then min total distance
-                    score = (-metro_dist, total_fare, total_dist) if is_metro_transit else (total_fare, total_dist)
+                f1 = get_fare_amount(c, l1['route_id'], from_id, tp_id, d1, l1_service)
+                f2 = get_fare_amount(c, l2['route_id'], tp_id, to_id, d2, l2_service)
+                total_fare = f1 + f2
+                metro_dist = round(d1 if l1_mode == 'metro' else d2, 2) if is_metro_transit else 0
+                express_dist = round((d1 if l1_service == 'Expressway' else 0) + (d2 if l2_service == 'Expressway' else 0), 2) if is_expressway_transit else 0
 
-                    if pair_key not in best_transits or score < best_transits[pair_key][0]:
-                        best_transits[pair_key] = (score, metro_dist, result_obj, is_metro_transit)
+                pair_key = (l1['route_id'], l2['route_id'])
+                # Priority: 0 for metro transit, 1 for expressway transit, 2 for regular bus transit
+                transit_prio = 0 if is_metro_transit else (1 if is_expressway_transit else 2)
+                score = (transit_prio, -metro_dist, -express_dist, total_fare, total_dist)
 
+                if pair_key not in best_transits or score < best_transits[pair_key][0]:
+                    best_transits[pair_key] = (score, metro_dist, is_metro_transit, is_expressway_transit, l1, l2, l1_service, l2_service, tp_id, d1, d2, f1, f2, total_dist, total_fare)
+
+    # Build full objects ONLY for the top winning transits
     metro_transits = []
+    expressway_transits = []
     bus_transits = []
-    for _, metro_dist, result_obj, is_metro in best_transits.values():
+
+    sorted_winners = sorted(best_transits.values(), key=lambda x: x[0])
+    for score, metro_dist, is_metro, is_express, l1, l2, l1_srv, l2_srv, tp_id, d1, d2, f1, f2, total_dist, total_fare in sorted_winners[:20]:
+        tp_en, tp_bn = get_stop_names(c, tp_id)
+        l1_mode = l1['mode'] if 'mode' in l1.keys() else 'bus'
+        l2_mode = l2['mode'] if 'mode' in l2.keys() else 'bus'
+        name1 = format_route_name(c, l1['route_name'], l1['route_id'], l1_mode)
+        name2 = format_route_name(c, l2['route_name'], l2['route_id'], l2_mode)
+        stops1 = get_intermediate_stops(c, l1['route_id'], from_id, tp_id)
+        stops2 = get_intermediate_stops(c, l2['route_id'], tp_id, to_id)
+        dur1 = get_metro_duration(c, l1['route_id'], from_id, tp_id) if l1_mode == 'metro' else None
+        dur2 = get_metro_duration(c, l2['route_id'], tp_id, to_id) if l2_mode == 'metro' else None
+
+        result_obj = TransitResult(
+            transfer_at=tp_en,
+            transfer_at_bn=tp_bn,
+            total_distance_km=total_dist,
+            total_fare=total_fare,
+            leg1=TransitLeg(
+                route_id=l1['route_id'],
+                route_name=name1,
+                mode=l1_mode,
+                service_type=l1_srv,
+                duration_mins=dur1,
+                from_stop=from_en,
+                from_stop_bn=from_bn,
+                to_stop=tp_en,
+                to_stop_bn=tp_bn,
+                distance_km=round(d1, 2),
+                fare=f1,
+                stops=stops1
+            ),
+            leg2=TransitLeg(
+                route_id=l2['route_id'],
+                route_name=name2,
+                mode=l2_mode,
+                service_type=l2_srv,
+                duration_mins=dur2,
+                from_stop=tp_en,
+                from_stop_bn=tp_bn,
+                to_stop=to_en,
+                to_stop_bn=to_bn,
+                distance_km=round(d2, 2),
+                fare=f2,
+                stops=stops2
+            )
+        )
         if is_metro:
             metro_transits.append((metro_dist, result_obj))
+        elif is_express:
+            expressway_transits.append(result_obj)
         else:
             bus_transits.append(result_obj)
 
@@ -310,16 +415,22 @@ def calculate_fare_search(c, from_stop: str, to_stop: str):
             diversified_metro.append(tr)
             tp_counter[tr.transfer_at] = count + 1
 
+    expressway_transits.sort(key=lambda x: (x.total_fare, x.total_distance_km))
     bus_transits.sort(key=lambda x: (x.total_fare, x.total_distance_km))
 
     # If direct bus results exist:
     if direct_results:
-        if diversified_metro:
-            return diversified_metro[:5] + direct_results, None
+        # Direct routes always appear first!
+        # Append competitive metro transit options only for long trips (straight_km >= 4.0 km)
+        if diversified_metro and straight_km and straight_km >= 4.0:
+            min_direct_dist = min((x.distance_km for x in direct_results if x.distance_km > 0), default=straight_km)
+            valid_metro = [tr for tr in diversified_metro if tr.total_distance_km <= min_direct_dist * 1.6]
+            if valid_metro:
+                return direct_results + valid_metro[:2], None
         return direct_results, None
 
     # If no direct routes exist:
-    all_transits = diversified_metro + bus_transits
+    all_transits = diversified_metro + expressway_transits + bus_transits
     if all_transits:
         if suggestions:
             return suggestions[:2] + all_transits[:8], None
